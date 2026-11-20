@@ -14,3 +14,9 @@ export class RecordingNotRetryableError extends ConflictError {
     super(`Gravação ${id} está ${status} e não pode ser reprocessada`);
   }
 }
+
+export class CorrectionNotAllowedError extends ConflictError {
+  constructor(id: string, reason: string) {
+    super(`Não é possível revisar a gravação ${id}: ${reason}`);
+  }
+}

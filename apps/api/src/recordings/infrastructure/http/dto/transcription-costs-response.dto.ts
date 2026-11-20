@@ -70,7 +70,24 @@ export class RecordingCostDto {
     nullable: true,
     example: 0.00634,
     description:
-      'Custo estimado em US$. Null se a gravação não foi transcrita ou o preço é desconhecido.',
+      'Transcrição, em US$. Null se a gravação não foi transcrita ou o preço é desconhecido.',
+  })
+  transcriptionCostUsd: number | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    example: 0.00064,
+    description:
+      'Revisão do texto por IA, em US$, pelos tokens gastos. Null se não houve revisão.',
+  })
+  correctionCostUsd: number | null;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    example: 0.00698,
+    description: 'Total estimado em US$ (transcrição + revisão).',
   })
   costUsd: number | null;
 }
@@ -83,12 +100,50 @@ export class TranscriptionCostTotalsDto {
   transcribedSeconds: number;
 
   @ApiProperty({ type: Number, nullable: true, example: 0.18345 })
+  transcriptionCostUsd: number | null;
+
+  @ApiProperty({ example: 0.0123 })
+  correctionCostUsd: number;
+
+  @ApiProperty({ type: Number, nullable: true, example: 0.19575 })
   costUsd: number | null;
+}
+
+export class TokenPriceDto {
+  @ApiProperty({ example: 'gpt-6-luna' })
+  model: string;
+
+  @ApiProperty({
+    example: 0.1,
+    description: 'US$ por 1 milhão de tokens de entrada.',
+  })
+  usdPerMillionInputTokens: number;
+
+  @ApiProperty({
+    example: 0.5,
+    description: 'US$ por 1 milhão de tokens de saída.',
+  })
+  usdPerMillionOutputTokens: number;
+}
+
+export class CorrectionPricingDto {
+  @ApiProperty({ example: 'gpt-6-luna' })
+  model: string;
+
+  @ApiProperty({
+    type: TokenPriceDto,
+    nullable: true,
+    description: 'Null se o preço do modelo de revisão é desconhecido.',
+  })
+  price: TokenPriceDto | null;
 }
 
 export class TranscriptionCostsResponseDto {
   @ApiProperty({ type: TranscriptionPriceDto })
   pricing: TranscriptionPriceDto;
+
+  @ApiProperty({ type: CorrectionPricingDto })
+  correction: CorrectionPricingDto;
 
   @ApiProperty({ type: [RecordingCostDto] })
   recordings: RecordingCostDto[];

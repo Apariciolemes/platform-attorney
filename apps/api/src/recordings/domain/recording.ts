@@ -1,8 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
-import { RecordingNotRetryableError } from './recording.errors.js';
+import {
+  CorrectionNotAllowedError,
+  RecordingNotRetryableError,
+} from './recording.errors.js';
 
 export enum RecordingStatus {
+  Pending = 'pending',
+  Processing = 'processing',
+  Completed = 'completed',
+  Failed = 'failed',
+}
+
+/** Revisão do texto por IA, que acontece depois de a transcrição ficar pronta. */
+export enum CorrectionStatus {
   Pending = 'pending',
   Processing = 'processing',
   Completed = 'completed',
@@ -20,6 +31,13 @@ export interface RecordingProps {
   language: string | null;
   durationSeconds: number | null;
   error: string | null;
+  /** Null enquanto não houver transcrição ou se a revisão estiver desligada. */
+  correctionStatus: CorrectionStatus | null;
+  correctedTranscript: string | null;
+  correctionError: string | null;
+  correctionModel: string | null;
+  correctionInputTokens: number | null;
+  correctionOutputTokens: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,9 +54,18 @@ export interface Transcript {
   durationSeconds: number | null;
 }
 
+export interface Correction {
+  text: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 /**
- * Gravação de áudio e o ciclo de vida da sua transcrição:
- * pending → processing → completed, com idas a pending (nova tentativa) ou failed.
+ * Gravação de áudio e seus dois ciclos de processamento:
+ * - transcrição: pending → processing → completed, com idas a pending (nova tentativa) ou failed;
+ * - revisão do texto (depois da transcrição): pending → processing → completed ou failed.
+ * Se a revisão falhar, a transcrição original continua valendo.
  */
 export class Recording {
   private constructor(private props: RecordingProps) {}
@@ -54,6 +81,12 @@ export class Recording {
       language: null,
       durationSeconds: null,
       error: null,
+      correctionStatus: null,
+      correctedTranscript: null,
+      correctionError: null,
+      correctionModel: null,
+      correctionInputTokens: null,
+      correctionOutputTokens: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -84,11 +117,23 @@ export class Recording {
     return this.props.status;
   }
 
+  get transcript() {
+    return this.props.transcript;
+  }
+
+  get correctionStatus() {
+    return this.props.correctionStatus;
+  }
+
   startProcessing(now = new Date()): void {
     this.change({ status: RecordingStatus.Processing, error: null }, now);
   }
 
-  complete(transcript: Transcript, now = new Date()): void {
+  /**
+   * Guarda a transcrição. Com `withCorrection`, a revisão fica pendente
+   * (e qualquer revisão anterior é descartada, pois o texto mudou).
+   */
+  complete(transcript: Transcript, withCorrection: boolean, now = new Date()) {
     this.change(
       {
         status: RecordingStatus.Completed,
@@ -96,6 +141,9 @@ export class Recording {
         language: transcript.language,
         durationSeconds: transcript.durationSeconds,
         error: null,
+        ...this.resetCorrection(
+          withCorrection ? CorrectionStatus.Pending : null,
+        ),
       },
       now,
     );
@@ -123,8 +171,76 @@ export class Recording {
     this.change({ status: RecordingStatus.Pending, error: null }, now);
   }
 
+  /** Pedido manual de (nova) revisão do texto: exige transcrição pronta e nenhuma revisão em andamento. */
+  requestCorrection(now = new Date()): void {
+    if (this.props.status !== RecordingStatus.Completed) {
+      throw new CorrectionNotAllowedError(
+        this.props.id,
+        'a transcrição ainda não está pronta',
+      );
+    }
+    if (this.props.correctionStatus === CorrectionStatus.Processing) {
+      throw new CorrectionNotAllowedError(
+        this.props.id,
+        'a revisão já está em andamento',
+      );
+    }
+    this.change(this.resetCorrection(CorrectionStatus.Pending), now);
+  }
+
+  startCorrection(now = new Date()): void {
+    this.change(
+      { correctionStatus: CorrectionStatus.Processing, correctionError: null },
+      now,
+    );
+  }
+
+  completeCorrection(correction: Correction, now = new Date()): void {
+    this.change(
+      {
+        correctionStatus: CorrectionStatus.Completed,
+        correctedTranscript: correction.text,
+        correctionError: null,
+        correctionModel: correction.model,
+        correctionInputTokens: correction.inputTokens,
+        correctionOutputTokens: correction.outputTokens,
+      },
+      now,
+    );
+  }
+
+  /** Volta para a fila se ainda haverá nova tentativa; senão, a revisão falha (o original continua valendo). */
+  registerCorrectionFailure(
+    message: string,
+    willRetry: boolean,
+    now = new Date(),
+  ): void {
+    this.change(
+      {
+        correctionStatus: willRetry
+          ? CorrectionStatus.Pending
+          : CorrectionStatus.Failed,
+        correctionError: message,
+      },
+      now,
+    );
+  }
+
   toSnapshot(): Readonly<RecordingProps> {
     return { ...this.props };
+  }
+
+  private resetCorrection(
+    status: CorrectionStatus | null,
+  ): Partial<RecordingProps> {
+    return {
+      correctionStatus: status,
+      correctedTranscript: null,
+      correctionError: null,
+      correctionModel: null,
+      correctionInputTokens: null,
+      correctionOutputTokens: null,
+    };
   }
 
   private change(changes: Partial<RecordingProps>, now: Date): void {

@@ -2,15 +2,23 @@ import { basename } from 'node:path';
 import type { AudioStorage } from '../ports/audio-storage.js';
 import type { RecordingRepository } from '../ports/recording.repository.js';
 import type { SpeechToText } from '../ports/speech-to-text.js';
+import type { TranscriptionQueue } from '../ports/transcription-queue.js';
 
 export type TranscribeOutcome = 'completed' | 'recording-missing';
 
-/** Executado pelo worker: baixa o áudio, transcreve e grava o resultado. */
+export interface TranscribeRecordingOptions {
+  /** Se a transcrição deve ser revisada por IA depois de pronta. */
+  correctionEnabled: boolean;
+}
+
+/** Executado pelo worker: baixa o áudio, transcreve, grava o resultado e agenda a revisão do texto. */
 export class TranscribeRecordingUseCase {
   constructor(
     private readonly recordings: RecordingRepository,
     private readonly storage: AudioStorage,
     private readonly speechToText: SpeechToText,
+    private readonly queue: TranscriptionQueue,
+    private readonly options: TranscribeRecordingOptions,
   ) {}
 
   async execute(recordingId: string): Promise<TranscribeOutcome> {
@@ -28,8 +36,11 @@ export class TranscribeRecordingUseCase {
       mimeType: recording.mimeType,
     });
 
-    recording.complete(transcript);
+    recording.complete(transcript, this.options.correctionEnabled);
     await this.recordings.save(recording);
+    if (this.options.correctionEnabled) {
+      await this.queue.enqueueCorrection(recording.id);
+    }
     return 'completed';
   }
 }

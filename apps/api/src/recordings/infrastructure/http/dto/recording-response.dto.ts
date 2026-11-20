@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { RecordingStatus } from '../../../domain/recording.js';
+import {
+  CorrectionStatus,
+  RecordingStatus,
+} from '../../../domain/recording.js';
 
 export class RecordingResponseDto {
   @ApiProperty({ format: 'uuid' })
@@ -47,6 +50,39 @@ export class RecordingResponseDto {
     description: 'Motivo da última falha de transcrição.',
   })
   error: string | null;
+
+  @ApiProperty({
+    enum: CorrectionStatus,
+    enumName: 'CorrectionStatus',
+    nullable: true,
+    description:
+      'Revisão do texto por IA, depois da transcrição. Null: ainda sem transcrição ou revisão desligada.',
+  })
+  correctionStatus: CorrectionStatus | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Texto revisado (concordância, pontuação, clareza); o original fica em `transcript`.',
+  })
+  correctedTranscript: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Motivo da última falha na revisão.',
+  })
+  correctionError: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'gpt-6-luna' })
+  correctionModel: string | null;
+
+  @ApiProperty({ type: Number, nullable: true, example: 1613 })
+  correctionInputTokens: number | null;
+
+  @ApiProperty({ type: Number, nullable: true, example: 958 })
+  correctionOutputTokens: number | null;
 
   @ApiProperty({ format: 'date-time' })
   createdAt: Date;

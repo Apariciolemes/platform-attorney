@@ -1,12 +1,23 @@
-import { Recording, RecordingStatus } from '../domain/recording.js';
-import { RecordingNotFoundError } from '../domain/recording.errors.js';
+import {
+  CorrectionStatus,
+  Recording,
+  RecordingStatus,
+} from '../domain/recording.js';
+import {
+  CorrectionNotAllowedError,
+  RecordingNotFoundError,
+} from '../domain/recording.errors.js';
 import { AudioStorage } from './ports/audio-storage.js';
 import { RecordingRepository } from './ports/recording.repository.js';
 import {
   SpeechToText,
   type SpeechToTextInput,
 } from './ports/speech-to-text.js';
+import { TextCorrector } from './ports/text-corrector.js';
 import { TranscriptionQueue } from './ports/transcription-queue.js';
+import { CorrectTranscriptUseCase } from './use-cases/correct-transcript.use-case.js';
+import { RecordCorrectionFailureUseCase } from './use-cases/record-correction-failure.use-case.js';
+import { RequestCorrectionUseCase } from './use-cases/request-correction.use-case.js';
 import { DeleteRecordingUseCase } from './use-cases/delete-recording.use-case.js';
 import { GetRecordingUseCase } from './use-cases/get-recording.use-case.js';
 import { RecordTranscriptionFailureUseCase } from './use-cases/record-transcription-failure.use-case.js';
@@ -65,10 +76,29 @@ class InMemoryAudioStorage extends AudioStorage {
 
 class FakeQueue extends TranscriptionQueue {
   readonly enqueued: string[] = [];
+  readonly corrections: string[] = [];
 
   enqueue(recordingId: string) {
     this.enqueued.push(recordingId);
     return Promise.resolve();
+  }
+  enqueueCorrection(recordingId: string) {
+    this.corrections.push(recordingId);
+    return Promise.resolve();
+  }
+}
+
+class FakeCorrector extends TextCorrector {
+  readonly received: string[] = [];
+
+  correct(text: string) {
+    this.received.push(text);
+    return Promise.resolve({
+      text: 'Olá, mundo.',
+      model: 'gpt-6-luna',
+      inputTokens: 100,
+      outputTokens: 30,
+    });
   }
 }
 
@@ -167,6 +197,8 @@ describe('casos de uso de gravações', () => {
         repo,
         storage,
         stt,
+        queue,
+        { correctionEnabled: true },
       ).execute(recording.id);
 
       expect(outcome).toBe('completed');
@@ -186,9 +218,106 @@ describe('casos de uso de gravações', () => {
         repo,
         storage,
         new FakeSpeechToText(),
+        queue,
+        { correctionEnabled: true },
       ).execute('missing');
 
       expect(outcome).toBe('recording-missing');
+    });
+  });
+
+  describe('revisão do texto', () => {
+    const transcribe = (correctionEnabled: boolean) =>
+      new TranscribeRecordingUseCase(
+        repo,
+        storage,
+        new FakeSpeechToText(),
+        queue,
+        { correctionEnabled },
+      );
+
+    it('a transcrição concluída agenda a revisão', async () => {
+      const recording = await upload();
+
+      await transcribe(true).execute(recording.id);
+
+      expect(queue.corrections).toEqual([recording.id]);
+      expect(repo.items.get(recording.id)?.correctionStatus).toBe(
+        CorrectionStatus.Pending,
+      );
+    });
+
+    it('com a revisão desligada, nada é agendado', async () => {
+      const recording = await upload();
+
+      await transcribe(false).execute(recording.id);
+
+      expect(queue.corrections).toHaveLength(0);
+      expect(repo.items.get(recording.id)?.correctionStatus).toBeNull();
+    });
+
+    it('revisa o texto transcrito e guarda o resultado', async () => {
+      const recording = await upload();
+      await transcribe(true).execute(recording.id);
+      const corrector = new FakeCorrector();
+
+      const outcome = await new CorrectTranscriptUseCase(
+        repo,
+        corrector,
+      ).execute(recording.id);
+
+      expect(outcome).toBe('completed');
+      expect(corrector.received).toEqual(['olá mundo']);
+      expect(repo.items.get(recording.id)?.toSnapshot()).toMatchObject({
+        transcript: 'olá mundo',
+        correctedTranscript: 'Olá, mundo.',
+        correctionStatus: CorrectionStatus.Completed,
+        correctionInputTokens: 100,
+        correctionOutputTokens: 30,
+      });
+    });
+
+    it('ignora revisão de gravação sem revisão pendente', async () => {
+      const recording = await upload();
+
+      const outcome = await new CorrectTranscriptUseCase(
+        repo,
+        new FakeCorrector(),
+      ).execute(recording.id);
+
+      expect(outcome).toBe('skipped');
+    });
+
+    it('falha definitiva na revisão é registrada', async () => {
+      const recording = await upload();
+      await transcribe(true).execute(recording.id);
+
+      await new RecordCorrectionFailureUseCase(repo).execute({
+        recordingId: recording.id,
+        message: 'sem créditos',
+        willRetry: false,
+      });
+
+      expect(repo.items.get(recording.id)?.toSnapshot()).toMatchObject({
+        status: RecordingStatus.Completed,
+        correctionStatus: CorrectionStatus.Failed,
+        correctionError: 'sem créditos',
+      });
+    });
+
+    it('pedido manual reagenda a revisão; recusa se ainda não há transcrição', async () => {
+      const recording = await upload();
+      const request = new RequestCorrectionUseCase(repo, queue);
+
+      await expect(request.execute(recording.id)).rejects.toBeInstanceOf(
+        CorrectionNotAllowedError,
+      );
+
+      await transcribe(false).execute(recording.id);
+      const requested = await request.execute(recording.id);
+
+      expect(requested.correctionStatus).toBe(CorrectionStatus.Pending);
+      expect(queue.corrections).toEqual([recording.id]);
     });
   });
 });

@@ -1,12 +1,19 @@
 import { UnrecoverableError, type Job } from 'bullmq';
-import type { TranscribeJobData } from '../../../config/queue.config.js';
+import {
+  CORRECT_TRANSCRIPT_JOB,
+  TRANSCRIBE_JOB,
+  type TranscribeJobData,
+} from '../../../config/queue.config.js';
 import { NonRetryableTranscriptionError } from '../../application/ports/speech-to-text.js';
+import type { CorrectTranscriptUseCase } from '../../application/use-cases/correct-transcript.use-case.js';
+import type { RecordCorrectionFailureUseCase } from '../../application/use-cases/record-correction-failure.use-case.js';
 import type { RecordTranscriptionFailureUseCase } from '../../application/use-cases/record-transcription-failure.use-case.js';
 import type { TranscribeRecordingUseCase } from '../../application/use-cases/transcribe-recording.use-case.js';
 import { TranscriptionProcessor } from './transcription.processor.js';
 
-const job = (attemptsMade = 1, attempts = 3) =>
+const job = (attemptsMade = 1, attempts = 3, name = TRANSCRIBE_JOB) =>
   ({
+    name,
     data: { recordingId: 'r1' },
     attemptsMade,
     opts: { attempts },
@@ -15,6 +22,8 @@ const job = (attemptsMade = 1, attempts = 3) =>
 describe('TranscriptionProcessor', () => {
   const transcribe = { execute: vi.fn() };
   const recordFailure = { execute: vi.fn() };
+  const correct = { execute: vi.fn() };
+  const recordCorrectionFailure = { execute: vi.fn() };
   let processor: TranscriptionProcessor;
 
   beforeEach(() => {
@@ -22,6 +31,8 @@ describe('TranscriptionProcessor', () => {
     processor = new TranscriptionProcessor(
       transcribe as unknown as TranscribeRecordingUseCase,
       recordFailure as unknown as RecordTranscriptionFailureUseCase,
+      correct as unknown as CorrectTranscriptUseCase,
+      recordCorrectionFailure as unknown as RecordCorrectionFailureUseCase,
     );
   });
 
@@ -62,6 +73,41 @@ describe('TranscriptionProcessor', () => {
       recordingId: 'r1',
       message: error.message,
       willRetry,
+    });
+  });
+
+  describe('job de revisão do texto', () => {
+    const correctionJob = (attemptsMade = 1) =>
+      job(attemptsMade, 3, CORRECT_TRANSCRIPT_JOB);
+
+    it('delega ao caso de uso de revisão, não ao de transcrição', async () => {
+      correct.execute.mockResolvedValue('completed');
+
+      await processor.process(correctionJob());
+
+      expect(correct.execute).toHaveBeenCalledWith('r1');
+      expect(transcribe.execute).not.toHaveBeenCalled();
+    });
+
+    it('converte erro sem retry em UnrecoverableError', async () => {
+      correct.execute.mockRejectedValue(
+        new NonRetryableTranscriptionError('sem créditos'),
+      );
+
+      await expect(processor.process(correctionJob())).rejects.toBeInstanceOf(
+        UnrecoverableError,
+      );
+    });
+
+    it('registra a falha como falha da revisão, não da transcrição', async () => {
+      await processor.onFailed(correctionJob(3), new Error('timeout'));
+
+      expect(recordCorrectionFailure.execute).toHaveBeenCalledWith({
+        recordingId: 'r1',
+        message: 'timeout',
+        willRetry: false,
+      });
+      expect(recordFailure.execute).not.toHaveBeenCalled();
     });
   });
 });

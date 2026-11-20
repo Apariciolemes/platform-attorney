@@ -15,7 +15,18 @@ export interface TranscriptionPrice {
   replacementUsdPerMinute: number | null;
 }
 
-/** Port: preço por minuto do serviço de transcrição em uso. */
+/** Preço de um modelo de texto, cobrado por token (US$ por 1 milhão de tokens). */
+export interface TokenPrice {
+  model: string;
+  usdPerMillionInputTokens: number;
+  usdPerMillionOutputTokens: number;
+}
+
+/** Port: preços do processamento das gravações (transcrição por minuto, revisão por token). */
 export abstract class TranscriptionPricing {
   abstract current(): TranscriptionPrice;
+  /** Modelo de revisão configurado e seu preço; preço null se desconhecido. */
+  abstract currentCorrection(): { model: string; price: TokenPrice | null };
+  /** Preço de um modelo de revisão específico (o que revisou cada gravação). */
+  abstract correctionPrice(model: string): TokenPrice | null;
 }

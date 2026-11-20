@@ -36,6 +36,7 @@ import { ErrorResponseDto } from '../../../shared/infrastructure/http/error-resp
 import { DeleteRecordingUseCase } from '../../application/use-cases/delete-recording.use-case.js';
 import { GetRecordingUseCase } from '../../application/use-cases/get-recording.use-case.js';
 import { ListRecordingsUseCase } from '../../application/use-cases/list-recordings.use-case.js';
+import { RequestCorrectionUseCase } from '../../application/use-cases/request-correction.use-case.js';
 import { RetryRecordingUseCase } from '../../application/use-cases/retry-recording.use-case.js';
 import { UploadRecordingUseCase } from '../../application/use-cases/upload-recording.use-case.js';
 import { RecordingResponseDto } from './dto/recording-response.dto.js';
@@ -60,6 +61,7 @@ export class RecordingsController {
     private readonly getRecording: GetRecordingUseCase,
     private readonly uploadRecording: UploadRecordingUseCase,
     private readonly retryRecording: RetryRecordingUseCase,
+    private readonly requestCorrection: RequestCorrectionUseCase,
     private readonly deleteRecording: DeleteRecordingUseCase,
     private readonly disk: StorageDisk,
   ) {}
@@ -186,6 +188,26 @@ export class RecordingsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<RecordingResponseDto> {
     return presentRecording(await this.retryRecording.execute(id));
+  }
+
+  @Post(':id/correction')
+  @ApiOperation({
+    summary: 'Pede a revisão do texto por IA',
+    description:
+      'Revisa concordância, pontuação e clareza da transcrição, sem mudar o sentido. ' +
+      'Use após uma falha na revisão ou para gravações transcritas antes dela existir.',
+  })
+  @RecordingIdParam()
+  @ApiCreatedResponse({ type: RecordingResponseDto })
+  @ApiNotFoundResponse({ type: ErrorResponseDto })
+  @ApiConflictResponse({
+    type: ErrorResponseDto,
+    description: 'Transcrição ainda não pronta ou revisão já em andamento',
+  })
+  async correct(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<RecordingResponseDto> {
+    return presentRecording(await this.requestCorrection.execute(id));
   }
 
   @Delete(':id')

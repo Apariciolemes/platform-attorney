@@ -1,5 +1,5 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
-import { RecordingStatus } from '../../domain/recording.js';
+import { CorrectionStatus, RecordingStatus } from '../../domain/recording.js';
 
 /** Modelo de tabela do TypeORM. O domínio usa `Recording`; a conversão fica no repositório. */
 @Entity('recordings')
@@ -41,6 +41,35 @@ export class RecordingOrmEntity {
 
   @Column({ type: 'text', nullable: true })
   error: string | null;
+
+  @Column({
+    name: 'correction_status',
+    type: 'enum',
+    enum: CorrectionStatus,
+    enumName: 'recordings_correction_status_enum',
+    nullable: true,
+  })
+  correctionStatus: CorrectionStatus | null;
+
+  @Column({ name: 'corrected_transcript', type: 'text', nullable: true })
+  correctedTranscript: string | null;
+
+  @Column({ name: 'correction_error', type: 'text', nullable: true })
+  correctionError: string | null;
+
+  @Column({
+    name: 'correction_model',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  correctionModel: string | null;
+
+  @Column({ name: 'correction_input_tokens', type: 'integer', nullable: true })
+  correctionInputTokens: number | null;
+
+  @Column({ name: 'correction_output_tokens', type: 'integer', nullable: true })
+  correctionOutputTokens: number | null;
 
   @Column({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

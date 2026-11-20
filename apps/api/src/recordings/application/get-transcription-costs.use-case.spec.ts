@@ -2,6 +2,7 @@ import { Recording, RecordingStatus } from '../domain/recording.js';
 import { estimateTranscriptionCost } from '../domain/transcription-cost.js';
 import { RecordingRepository } from './ports/recording.repository.js';
 import {
+  type TokenPrice,
   type TranscriptionPrice,
   TranscriptionPricing,
 } from './ports/transcription-pricing.js';
@@ -40,6 +41,14 @@ class FixedPricing extends TranscriptionPricing {
       replacementModel: null,
       replacementUsdPerMinute: null,
     };
+  }
+  currentCorrection() {
+    return { model: 'gpt-6-luna', price: this.correctionPrice('gpt-6-luna') };
+  }
+  correctionPrice(model: string): TokenPrice | null {
+    return model === 'gpt-6-luna'
+      ? { model, usdPerMillionInputTokens: 0.1, usdPerMillionOutputTokens: 0.5 }
+      : null;
   }
 }
 
@@ -104,7 +113,40 @@ describe('GetTranscriptionCostsUseCase', () => {
     expect(result.totals).toEqual({
       transcribedRecordings: 1,
       transcribedSeconds: 60,
+      transcriptionCostUsd: null,
+      correctionCostUsd: 0,
       costUsd: null,
     });
+  });
+
+  it('soma a revisão pelos tokens gastos e pelo preço do modelo que revisou', async () => {
+    const revised = Recording.restore({
+      ...recording(RecordingStatus.Completed, 60).toSnapshot(),
+      correctionModel: 'gpt-6-luna',
+      correctionInputTokens: 1_000_000,
+      correctionOutputTokens: 200_000,
+    });
+    const unknownModel = Recording.restore({
+      ...recording(RecordingStatus.Completed, 60).toSnapshot(),
+      correctionModel: 'modelo-desconhecido',
+      correctionInputTokens: 10,
+      correctionOutputTokens: 10,
+    });
+
+    const result = await new GetTranscriptionCostsUseCase(
+      new FakeRepository([revised, unknownModel]),
+      new FixedPricing(0.006),
+    ).execute();
+
+    // revisão: 1M × 0,10 + 0,2M × 0,50 = US$ 0,20
+    expect(result.recordings[0]).toMatchObject({
+      transcriptionCostUsd: expect.closeTo(0.006),
+      correctionCostUsd: expect.closeTo(0.2),
+      costUsd: expect.closeTo(0.206),
+    });
+    expect(result.recordings[1].correctionCostUsd).toBeNull();
+    expect(result.totals.correctionCostUsd).toBeCloseTo(0.2);
+    expect(result.totals.costUsd).toBeCloseTo(0.212);
+    expect(result.correction.model).toBe('gpt-6-luna');
   });
 });

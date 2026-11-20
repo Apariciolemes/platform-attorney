@@ -10,6 +10,7 @@ import { DeleteRecordingUseCase } from './application/use-cases/delete-recording
 import { GetRecordingUseCase } from './application/use-cases/get-recording.use-case.js';
 import { GetTranscriptionCostsUseCase } from './application/use-cases/get-transcription-costs.use-case.js';
 import { ListRecordingsUseCase } from './application/use-cases/list-recordings.use-case.js';
+import { RequestCorrectionUseCase } from './application/use-cases/request-correction.use-case.js';
 import { RetryRecordingUseCase } from './application/use-cases/retry-recording.use-case.js';
 import { UploadRecordingUseCase } from './application/use-cases/upload-recording.use-case.js';
 import { CostsController } from './infrastructure/http/costs.controller.js';
@@ -64,6 +65,12 @@ import { S3AudioStorage } from './infrastructure/storage/s3-audio-storage.js';
       provide: RetryRecordingUseCase,
       useFactory: (r: RecordingRepository, q: TranscriptionQueue) =>
         new RetryRecordingUseCase(r, q),
+      inject: [RecordingRepository, TranscriptionQueue],
+    },
+    {
+      provide: RequestCorrectionUseCase,
+      useFactory: (r: RecordingRepository, q: TranscriptionQueue) =>
+        new RequestCorrectionUseCase(r, q),
       inject: [RecordingRepository, TranscriptionQueue],
     },
     {

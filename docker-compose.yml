@@ -21,6 +21,9 @@ x-app-env: &app-env
   STT_BASE_URL: ${STT_BASE_URL:-https://api.openai.com/v1}
   STT_MODEL: ${STT_MODEL:-whisper-1}
   STT_PRICE_PER_MINUTE_USD: ${STT_PRICE_PER_MINUTE_USD:-}
+  # Revisão do texto por IA: o worker usa para revisar; a API, para calcular custos.
+  CORRECTION_MODEL: ${CORRECTION_MODEL:-gpt-6-luna}
+  CORRECTION_BASE_URL: ${CORRECTION_BASE_URL:-https://api.openai.com/v1}
 
 services:
   db:
@@ -125,6 +128,9 @@ services:
       # Só a API roda as migrations, para evitar corrida entre os dois.
       DB_MIGRATIONS_RUN: "false"
       STT_API_KEY: ${STT_API_KEY:-}
+      # Sem CORRECTION_API_KEY, a revisão usa a mesma chave da transcrição.
+      CORRECTION_API_KEY: ${CORRECTION_API_KEY:-}
+      CORRECTION_ENABLED: ${CORRECTION_ENABLED:-true}
       TRANSCRIPTION_LANGUAGE: ${TRANSCRIPTION_LANGUAGE:-pt}
     depends_on:
       api:
