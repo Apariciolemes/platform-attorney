@@ -9,11 +9,19 @@ import type { Transcript } from '../../domain/recording.js';
 import { openAiError } from '../openai/openai-error.js';
 import { openAiUploadFile } from './openai-audio-format.js';
 
+/**
+ * Resposta de POST /audio/transcriptions. Varia por modelo (conferido em chamadas reais):
+ * - whisper-1 (verbose_json): `language` ("portuguese") e `duration` (segundos exatos);
+ * - gpt-transcribe (só json/text): `languages` ([{ code: "pt" }]) e
+ *   `usage: { type: "duration", seconds }`, os segundos cobrados (arredondados para cima).
+ * Modelos cobrados por token devolvem `usage.type: "tokens"`, sem duração.
+ */
 interface TranscriptionResponse {
   text: string;
-  /** Só no formato verbose_json. */
   language?: string;
   duration?: number;
+  languages?: { code?: string }[];
+  usage?: { type?: string; seconds?: number };
 }
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
@@ -74,8 +82,12 @@ export class OpenAiSpeechToText extends SpeechToText {
     const data = (await response.json()) as TranscriptionResponse;
     return {
       text: data.text.trim(),
-      language: data.language ?? null,
-      durationSeconds: data.duration ?? null,
+      language: data.language ?? data.languages?.[0]?.code ?? null,
+      durationSeconds: data.duration ?? billedSeconds(data) ?? null,
     };
   }
+}
+
+function billedSeconds(data: TranscriptionResponse): number | undefined {
+  return data.usage?.type === 'duration' ? data.usage.seconds : undefined;
 }

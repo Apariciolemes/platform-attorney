@@ -74,6 +74,46 @@ describe('OpenAiSpeechToText', () => {
     expect((init.body as FormData).get('response_format')).toBe('json');
   });
 
+  it('gpt-transcribe: usa os segundos cobrados e o idioma de `languages`', async () => {
+    // Resposta real do gpt-transcribe (response_format json) para um áudio de 10,02 s.
+    fetchMock.mockResolvedValue(
+      Response.json({
+        text: 'Olá, este é um teste.',
+        languages: [{ code: 'pt' }],
+        usage: { type: 'duration', seconds: 11 },
+      }),
+    );
+    const transcriber = new OpenAiSpeechToText(
+      config({ STT_API_KEY: 'key', STT_MODEL: 'gpt-transcribe' }),
+    );
+
+    const result = await transcriber.transcribe(input);
+
+    expect(result).toEqual({
+      text: 'Olá, este é um teste.',
+      language: 'pt',
+      durationSeconds: 11,
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const form = init.body as FormData;
+    expect(form.get('model')).toBe('gpt-transcribe');
+    expect(form.get('response_format')).toBe('json');
+  });
+
+  it('modelo cobrado por token não tem duração', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        text: 'oi',
+        usage: { type: 'tokens', input_tokens: 100, output_tokens: 5 },
+      }),
+    );
+    const transcriber = new OpenAiSpeechToText(
+      config({ STT_API_KEY: 'key', STT_MODEL: 'gpt-4o-transcribe' }),
+    );
+
+    expect((await transcriber.transcribe(input)).durationSeconds).toBeNull();
+  });
+
   it('falha sem retry quando não há chave', async () => {
     const transcriber = new OpenAiSpeechToText(config({}));
     await expect(transcriber.transcribe(input)).rejects.toBeInstanceOf(
