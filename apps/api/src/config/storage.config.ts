@@ -18,7 +18,8 @@ export function buildStorageOptions(
       [RECORDINGS_DISK]: new S3Disk({
         bucket: env.STORAGE_BUCKET ?? 'recordings',
         region: env.STORAGE_REGION ?? 'us-east-1',
-        endpoint: env.STORAGE_ENDPOINT || undefined,
+        // Vazio = storage local do docker-compose acessado do host (no Docker, o compose injeta http://storage:8333).
+        endpoint: env.STORAGE_ENDPOINT || 'http://localhost:8333',
         forcePathStyle: env.STORAGE_FORCE_PATH_STYLE === 'true',
         // Sem chaves explícitas, o S3Disk usa AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
         credentials:

@@ -112,7 +112,7 @@ Plano gratuito do R2: 10 GB armazenados por mês, 1 milhão de escritas e 10 mil
    ```
 
 4. No usuário, abra **Security credentials** → **Create access key** (tipo "Application running outside AWS").
-5. No `.env`: deixe `STORAGE_ENDPOINT=` vazio, `STORAGE_REGION=sa-east-1`, `STORAGE_FORCE_PATH_STYLE=false`, e preencha o bucket e as chaves.
+5. No `.env`: `STORAGE_ENDPOINT=https://s3.sa-east-1.amazonaws.com`, `STORAGE_REGION=sa-east-1`, `STORAGE_FORCE_PATH_STYLE=false`, e preencha o bucket e as chaves. Não deixe o endpoint vazio: vazio significa "storage local".
 
 Contas novas da AWS recebem créditos gratuitos que expiram (o plano Free dura cerca de 6 meses). Depois disso o S3 passa a ser cobrado. Configure um alerta de orçamento em **Billing**.
 
