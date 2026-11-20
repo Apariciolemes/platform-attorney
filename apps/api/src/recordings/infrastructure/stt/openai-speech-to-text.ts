@@ -6,6 +6,7 @@ import {
   type SpeechToTextInput,
 } from '../../application/ports/speech-to-text.js';
 import type { Transcript } from '../../domain/recording.js';
+import { openAiUploadFile } from './openai-audio-format.js';
 
 interface TranscriptionResponse {
   text: string;
@@ -56,11 +57,12 @@ export class OpenAiSpeechToText extends SpeechToText {
     ).replace(/\/+$/, '');
     const model = this.config.get<string>('STT_MODEL') || DEFAULT_MODEL;
 
+    const file = openAiUploadFile(input.filename, input.mimeType);
     const form = new FormData();
     form.append(
       'file',
-      new Blob([new Uint8Array(input.audio)], { type: input.mimeType }),
-      input.filename,
+      new Blob([new Uint8Array(input.audio)], { type: file.contentType }),
+      file.filename,
     );
     form.append('model', model);
     // Modelos Whisper devolvem idioma e duração em verbose_json; os gpt-4o-*-transcribe só aceitam json.

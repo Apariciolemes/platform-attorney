@@ -45,6 +45,9 @@ import { presentRecording } from './recording.presenter.js';
 /** Limite de arquivo da API de transcrição (OpenAI e Groq aceitam até 25 MB). */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+/** Áudio, ou contêiner de vídeo que costuma carregar só áudio (mp4/webm). */
+export const AUDIO_MEDIA_TYPE = /^(audio\/|video\/(mp4|webm)\b)/;
+
 const RecordingIdParam = () =>
   ApiParam({ name: 'id', format: 'uuid', description: 'Id da gravação' });
 
@@ -111,11 +114,16 @@ export class RecordingsController {
       new ParseFilePipe({
         validators: [
           new FileTypeValidator({
-            fileType: /^audio\//,
-            // Alguns formatos (ex.: webm de gravações do navegador) são detectados como vídeo.
+            // O tipo é detectado pelo conteúdo (magic bytes). Contêineres mp4/webm também
+            // carregam áudio: o WhatsApp Web baixa áudios como .mp4 e o gravador do navegador
+            // gera webm, ambos detectados como video/*.
+            fileType: AUDIO_MEDIA_TYPE,
+            // Grava o tipo detectado, não o declarado pelo navegador (ex.: "video/mp4" de um M4A).
+            overrideMimeType: true,
+            // Só usado se o conteúdo não for reconhecido.
             fallbackToMimetype: true,
             errorMessage:
-              'Envie um arquivo de áudio (mp3, m4a, wav, ogg, webm…)',
+              'Envie um arquivo de áudio (mp3, m4a, wav, ogg, opus, webm…)',
           }),
         ],
       }),
