@@ -12,6 +12,15 @@ const editingId = ref<string | null>(null)
 const formTitle = computed(() => (editingId.value ? 'Editar cliente' : 'Novo cliente'))
 const submitLabel = computed(() => (editingId.value ? 'Salvar alterações' : 'Cadastrar cliente'))
 
+/*
+ * Tabela no desktop; no celular (< sm) cada linha vira um bloco empilhado,
+ * com o rótulo da coluna vindo de data-label.
+ */
+const th = 'px-4 py-3 text-left text-sm font-semibold whitespace-nowrap text-muted'
+const tdBase = 'border-b border-line px-4 py-3 align-middle max-sm:border-0 max-sm:p-0'
+const td = `${tdBase} max-sm:block`
+const labeledTd = `${tdBase} max-sm:grid max-sm:grid-cols-[7.5rem_1fr] max-sm:gap-3 max-sm:wrap-anywhere max-sm:before:text-sm max-sm:before:font-semibold max-sm:before:text-muted max-sm:before:content-[attr(data-label)]`
+
 function resetForm() {
   Object.assign(form, emptyForm())
   editingId.value = null
@@ -45,16 +54,18 @@ onMounted(fetchClients)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-header">
-      <h1>Clientes</h1>
-      <p>Guarde os dados de contato de cada cliente em um só lugar.</p>
+  <div class="grid gap-8">
+    <header class="grid gap-2">
+      <h1 class="text-2xl">Clientes</h1>
+      <p class="max-w-[60ch] text-muted">
+        Guarde os dados de contato de cada cliente em um só lugar.
+      </p>
     </header>
 
-    <section class="section" aria-labelledby="client-form-title">
-      <h2 id="client-form-title">{{ formTitle }}</h2>
-      <form class="panel client-form" @submit.prevent="submit">
-        <div class="field">
+    <section class="grid gap-4" aria-labelledby="client-form-title">
+      <h2 id="client-form-title" class="text-lg">{{ formTitle }}</h2>
+      <form class="panel grid gap-x-6 gap-y-4 sm:grid-cols-2" @submit.prevent="submit">
+        <div class="grid gap-1">
           <label class="field-label" for="client-name">Nome</label>
           <input
             id="client-name"
@@ -65,7 +76,7 @@ onMounted(fetchClients)
             autocomplete="name"
           />
         </div>
-        <div class="field">
+        <div class="grid gap-1">
           <label class="field-label" for="client-email">E-mail</label>
           <input
             id="client-email"
@@ -77,86 +88,90 @@ onMounted(fetchClients)
             autocomplete="email"
           />
         </div>
-        <div class="field">
+        <div class="grid gap-1">
           <label class="field-label" for="client-document">
-            CPF ou CNPJ <span class="field-optional">(opcional)</span>
+            CPF ou CNPJ <span class="font-normal text-muted">(opcional)</span>
           </label>
           <input
             id="client-document"
             v-model="form.document"
-            class="input numeric"
+            class="input tabular-nums"
             maxlength="20"
             inputmode="numeric"
           />
         </div>
-        <div class="field">
+        <div class="grid gap-1">
           <label class="field-label" for="client-phone">
-            Telefone <span class="field-optional">(opcional)</span>
+            Telefone <span class="font-normal text-muted">(opcional)</span>
           </label>
           <input
             id="client-phone"
             v-model="form.phone"
-            class="input numeric"
+            class="input tabular-nums"
             type="tel"
             maxlength="20"
             autocomplete="tel"
           />
         </div>
-        <div class="form-actions">
+        <div class="col-span-full flex flex-wrap gap-3 pt-2">
           <button type="submit" class="btn btn-primary" :disabled="loading">
             {{ submitLabel }}
           </button>
           <button v-if="editingId" type="button" class="btn" @click="resetForm">Cancelar</button>
         </div>
-        <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
+        <p v-if="error" class="col-span-full text-danger" role="alert">{{ error }}</p>
       </form>
     </section>
 
-    <section class="section" aria-labelledby="client-list-title">
-      <div class="section-header">
-        <h2 id="client-list-title">Cadastrados</h2>
-        <span v-if="clients.length" class="muted numeric">
+    <section class="grid gap-4" aria-labelledby="client-list-title">
+      <div class="flex flex-wrap items-baseline justify-between gap-4">
+        <h2 id="client-list-title" class="text-lg">Cadastrados</h2>
+        <span v-if="clients.length" class="text-muted tabular-nums">
           {{ clients.length }} {{ clients.length === 1 ? 'cliente' : 'clientes' }}
         </span>
       </div>
 
-      <p v-if="loading && !clients.length" class="muted">Carregando clientes…</p>
-      <p v-else-if="!clients.length" class="muted">
+      <p v-if="loading && !clients.length" class="text-muted">Carregando clientes…</p>
+      <p v-else-if="!clients.length" class="text-muted">
         Nenhum cliente cadastrado ainda. Use o formulário acima para adicionar o primeiro.
       </p>
-      <div v-else class="panel table-panel">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Nome</th>
-              <th scope="col">E-mail</th>
-              <th scope="col">CPF ou CNPJ</th>
-              <th scope="col">Telefone</th>
-              <th scope="col"><span class="visually-hidden">Ações</span></th>
+      <div v-else class="panel overflow-x-auto p-0! max-sm:overflow-visible">
+        <table class="w-full border-collapse max-sm:block">
+          <thead class="max-sm:sr-only">
+            <tr class="border-b border-line">
+              <th scope="col" :class="th">Nome</th>
+              <th scope="col" :class="th">E-mail</th>
+              <th scope="col" :class="th">CPF ou CNPJ</th>
+              <th scope="col" :class="th">Telefone</th>
+              <th scope="col" :class="th"><span class="sr-only">Ações</span></th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="client in clients" :key="client.id">
-              <td class="cell-name">{{ client.name }}</td>
-              <td data-label="E-mail">{{ client.email }}</td>
-              <td class="numeric" data-label="CPF ou CNPJ">
+          <tbody class="max-sm:block">
+            <tr
+              v-for="client in clients"
+              :key="client.id"
+              class="[&:last-child>td]:border-b-0 max-sm:grid max-sm:gap-2 max-sm:border-b max-sm:border-line max-sm:p-4 max-sm:last:border-b-0"
+            >
+              <td :class="td" class="font-semibold">{{ client.name }}</td>
+              <td :class="labeledTd" data-label="E-mail">{{ client.email }}</td>
+              <td :class="labeledTd" class="tabular-nums" data-label="CPF ou CNPJ">
                 <span v-if="client.document">{{ client.document }}</span>
-                <span v-else class="muted">Não informado</span>
+                <span v-else class="text-muted">Não informado</span>
               </td>
-              <td class="numeric" data-label="Telefone">
+              <td :class="labeledTd" class="tabular-nums" data-label="Telefone">
                 <span v-if="client.phone">{{ client.phone }}</span>
-                <span v-else class="muted">Não informado</span>
+                <span v-else class="text-muted">Não informado</span>
               </td>
-              <td class="cell-actions">
+              <td :class="td" class="text-right whitespace-nowrap max-sm:-ml-3 max-sm:text-left">
                 <button type="button" class="btn btn-quiet" @click="edit(client)">
-                  Editar<span class="visually-hidden"> {{ client.name }}</span>
+                  Editar<span class="sr-only"> {{ client.name }}</span>
                 </button>
                 <button
                   type="button"
                   class="btn btn-quiet btn-danger"
                   @click="confirmRemove(client)"
                 >
-                  Remover<span class="visually-hidden"> {{ client.name }}</span>
+                  Remover<span class="sr-only"> {{ client.name }}</span>
                 </button>
               </td>
             </tr>
@@ -166,125 +181,3 @@ onMounted(fetchClients)
     </section>
   </div>
 </template>
-
-<style scoped>
-.client-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4) var(--space-6);
-}
-
-.form-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  padding-top: var(--space-2);
-}
-
-.form-error {
-  grid-column: 1 / -1;
-}
-
-@media (max-width: 40rem) {
-  .client-form {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* A tabela rola dentro do painel no celular, sem estourar a página. */
-.table-panel {
-  padding: 0;
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  padding: var(--space-3) var(--space-4);
-  text-align: left;
-  vertical-align: middle;
-  border-bottom: 1px solid var(--color-line);
-}
-
-tbody tr:last-child td {
-  border-bottom: none;
-}
-
-th {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--color-muted);
-  white-space: nowrap;
-}
-
-.cell-name {
-  font-weight: 600;
-}
-
-.cell-actions {
-  white-space: nowrap;
-  text-align: right;
-}
-
-/* No celular, cada cliente vira um bloco empilhado com rótulos, em vez de rolagem lateral. */
-@media (max-width: 40rem) {
-  .table-panel {
-    overflow-x: visible;
-  }
-
-  table,
-  tbody,
-  tr,
-  td {
-    display: block;
-  }
-
-  thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-  }
-
-  tr {
-    display: grid;
-    gap: var(--space-2);
-    padding: var(--space-4);
-    border-bottom: 1px solid var(--color-line);
-  }
-
-  tbody tr:last-child {
-    border-bottom: none;
-  }
-
-  td {
-    padding: 0;
-    border: none;
-  }
-
-  td[data-label] {
-    display: grid;
-    grid-template-columns: 7.5rem 1fr;
-    gap: var(--space-3);
-    overflow-wrap: anywhere;
-  }
-
-  td[data-label]::before {
-    content: attr(data-label);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--color-muted);
-  }
-
-  .cell-actions {
-    text-align: left;
-    margin-left: calc(var(--space-3) * -1);
-  }
-}
-</style>

@@ -5,7 +5,7 @@ Monorepo (pnpm workspaces) com:
 | Pasta       | Stack                                                                            |
 | ----------- | -------------------------------------------------------------------------------- |
 | `apps/api`  | NestJS 12 (ESM) + TypeORM + PostgreSQL, validação com class-validator             |
-| `apps/web`  | Vue 3 + TypeScript + Composition API (`<script setup>`), Vite, Vue Router, Axios |
+| `apps/web`  | Vue 3 + TypeScript + Composition API (`<script setup>`), Vite, Tailwind CSS v4, Vue Router, Axios |
 
 A API também tem um **worker** (mesmo código, outro processo) que transcreve áudios com Whisper.
 
@@ -295,7 +295,7 @@ apps/
     PRODUCT.md                  # para quem é o produto, tom e princípios de design
     DESIGN.md                   # sistema de design: fontes, cores, espaços, componentes
   web/src/
-    style.css                   # tokens e componentes do DESIGN.md
+    style.css                   # tema do Tailwind (tokens do DESIGN.md) + componentes
     services/                   # cliente HTTP (axios)
     composables/                # useClients, useRecordings (com polling)
     views/                      # ClientsView, RecordingsView

@@ -46,19 +46,22 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-header">
-      <h1>Gravações</h1>
-      <p>Envie o áudio de uma reunião ou audiência e leia a transcrição em português.</p>
+  <div class="grid gap-8">
+    <header class="grid gap-2">
+      <h1 class="text-2xl">Gravações</h1>
+      <p class="max-w-[60ch] text-muted">
+        Envie o áudio de uma reunião ou audiência e leia a transcrição em português.
+      </p>
     </header>
 
-    <section class="section" aria-labelledby="upload-title">
-      <h2 id="upload-title">Enviar áudio</h2>
-      <div class="panel upload">
-        <div class="upload-control">
+    <section class="grid gap-4" aria-labelledby="upload-title">
+      <h2 id="upload-title" class="text-lg">Enviar áudio</h2>
+      <div class="panel grid gap-4">
+        <div class="flex flex-wrap items-center gap-4">
+          <!-- O input real fica escondido; o rótulo faz o papel de botão e recebe o foco visível. -->
           <input
             id="audio-file"
-            class="visually-hidden file-input"
+            class="peer sr-only"
             type="file"
             accept="audio/*"
             aria-describedby="audio-file-hint"
@@ -67,46 +70,51 @@ onMounted(load)
           />
           <label
             for="audio-file"
-            class="btn btn-primary"
+            class="btn btn-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
             :aria-disabled="uploadProgress !== null"
           >
             Escolher arquivo de áudio
           </label>
-          <p id="audio-file-hint" class="hint">
+          <p id="audio-file-hint" class="max-w-[60ch] flex-[1_1_18rem] text-sm text-muted">
             MP3, M4A, WAV, OGG ou WEBM, até 25 MB. A transcrição aparece na lista abaixo em
             alguns segundos.
           </p>
         </div>
 
-        <div v-if="uploadProgress !== null" class="upload-progress">
-          <label for="upload-progress" class="hint numeric">
+        <div v-if="uploadProgress !== null" class="grid max-w-sm gap-1">
+          <label for="upload-progress" class="text-sm text-muted tabular-nums">
             Enviando… {{ uploadProgress }}%
           </label>
-          <progress id="upload-progress" max="100" :value="uploadProgress" />
+          <progress
+            id="upload-progress"
+            class="h-2 w-full accent-primary"
+            max="100"
+            :value="uploadProgress"
+          />
         </div>
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <p v-if="error" class="text-danger" role="alert">{{ error }}</p>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="recordings-title">
-      <div class="section-header">
-        <h2 id="recordings-title">Enviadas</h2>
-        <span v-if="recordings.length" class="muted numeric">
+    <section class="grid gap-4" aria-labelledby="recordings-title">
+      <div class="flex flex-wrap items-baseline justify-between gap-4">
+        <h2 id="recordings-title" class="text-lg">Enviadas</h2>
+        <span v-if="recordings.length" class="text-muted tabular-nums">
           {{ recordings.length }} {{ recordings.length === 1 ? 'gravação' : 'gravações' }}
         </span>
       </div>
 
-      <p v-if="loading && !recordings.length" class="muted">Carregando gravações…</p>
-      <p v-else-if="!recordings.length" class="muted">
+      <p v-if="loading && !recordings.length" class="text-muted">Carregando gravações…</p>
+      <p v-else-if="!recordings.length" class="text-muted">
         Nenhum áudio enviado ainda. O primeiro que você enviar aparece aqui.
       </p>
 
-      <ul v-else class="panel recording-list" role="list">
-        <li v-for="rec in recordings" :key="rec.id" class="recording">
-          <div class="recording-header">
-            <div class="recording-title">
-              <h3>{{ rec.originalName }}</h3>
-              <p class="hint numeric">
+      <ul v-else class="panel m-0 list-none divide-y divide-line p-0!" role="list">
+        <li v-for="rec in recordings" :key="rec.id" class="grid gap-3 p-4 sm:p-6">
+          <div class="flex items-start justify-between gap-4">
+            <div class="grid min-w-0 gap-1">
+              <h3 class="font-sans text-base wrap-anywhere">{{ rec.originalName }}</h3>
+              <p class="text-sm text-muted tabular-nums">
                 {{ dateFormat.format(new Date(rec.createdAt)) }} ·
                 {{ formatSize(rec.sizeBytes) }}
                 <template v-if="formatDuration(rec.durationSeconds)">
@@ -117,17 +125,19 @@ onMounted(load)
             <span class="badge" :class="`badge-${rec.status}`">{{ statusLabel[rec.status] }}</span>
           </div>
 
-          <audio :src="audioUrl(rec.id)" controls preload="none">
+          <audio class="h-10 w-full max-w-md" :src="audioUrl(rec.id)" controls preload="none">
             Seu navegador não reproduz este áudio.
           </audio>
 
-          <p v-if="rec.transcript" class="transcript">{{ rec.transcript }}</p>
-          <p v-else-if="rec.status === 'failed'" class="error failure">
+          <p v-if="rec.transcript" class="max-w-[70ch] leading-relaxed whitespace-pre-wrap">
+            {{ rec.transcript }}
+          </p>
+          <p v-else-if="rec.status === 'failed'" class="max-w-[70ch] text-danger">
             Não foi possível transcrever: {{ rec.error }}
           </p>
-          <p v-else class="hint">A transcrição aparece aqui quando ficar pronta.</p>
+          <p v-else class="text-sm text-muted">A transcrição aparece aqui quando ficar pronta.</p>
 
-          <div class="recording-actions">
+          <div class="-ml-3 flex gap-2">
             <button
               v-if="rec.status === 'failed'"
               type="button"
@@ -137,7 +147,7 @@ onMounted(load)
               Tentar de novo
             </button>
             <button type="button" class="btn btn-quiet btn-danger" @click="confirmRemove(rec)">
-              Remover<span class="visually-hidden"> {{ rec.originalName }}</span>
+              Remover<span class="sr-only"> {{ rec.originalName }}</span>
             </button>
           </div>
         </li>
@@ -145,109 +155,3 @@ onMounted(load)
     </section>
   </div>
 </template>
-
-<style scoped>
-.upload {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.upload-control {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.upload-control .hint {
-  flex: 1 1 18rem;
-  max-width: 60ch;
-}
-
-/* O input real fica escondido; o rótulo faz o papel de botão e recebe o foco visível. */
-.file-input:focus-visible + label {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-label[aria-disabled='true'] {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.upload-progress {
-  display: grid;
-  gap: var(--space-1);
-  max-width: 24rem;
-}
-
-progress {
-  width: 100%;
-  height: 0.5rem;
-  accent-color: var(--color-primary);
-}
-
-.recording-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.recording {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-6);
-  border-bottom: 1px solid var(--color-line);
-}
-
-.recording:last-child {
-  border-bottom: none;
-}
-
-@media (max-width: 40rem) {
-  .recording {
-    padding: var(--space-4);
-  }
-}
-
-.recording-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.recording-title {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.recording-title h3 {
-  font-family: var(--font-sans);
-  font-size: var(--text-base);
-  overflow-wrap: anywhere;
-}
-
-audio {
-  width: 100%;
-  max-width: 28rem;
-  height: 2.5rem;
-}
-
-.transcript {
-  max-width: 70ch;
-  white-space: pre-wrap;
-  line-height: 1.6;
-}
-
-.failure {
-  max-width: 70ch;
-}
-
-.recording-actions {
-  display: flex;
-  gap: var(--space-2);
-  margin-left: calc(var(--space-3) * -1);
-}
-</style>

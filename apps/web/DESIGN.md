@@ -2,8 +2,11 @@
 
 Fonte única de verdade para fontes, cores, tamanhos, espaçamentos e raios do frontend
 (no formato do `document` do [Impeccable](https://impeccable.style)). Os tokens vivem em
-[`src/style.css`](src/style.css); **use sempre os tokens**, nunca valores soltos. Valor fora desta
-lista = atualize este documento antes.
+[`src/style.css`](src/style.css) como **tema do Tailwind CSS v4** (`@theme`): os valores padrão do
+Tailwind para cor, fonte, tamanho de texto e raio foram substituídos pelos nossos, então só existem as
+classes aprovadas (`text-ink`, `bg-surface`, `text-sm`, `rounded-md`…). **Use sempre essas classes**,
+nunca valores arbitrários (`text-[#333]`, `p-[13px]`). Valor fora desta lista = atualize este documento
+e o `@theme` antes.
 
 Contexto do produto: [PRODUCT.md](PRODUCT.md).
 
@@ -61,17 +64,29 @@ Escala de 4px: `--space-1` 4 · `--space-2` 8 · `--space-3` 12 · `--space-4` 1
 - Bordas de 1px; **sem sombras** (o painel se define pela borda e pelo fundo). Nada de card dentro de card.
 - Foco: contorno de 2px em `--color-primary` com afastamento de 2px, em todo elemento interativo.
 
-## Componentes (classes globais em `style.css`)
+## Componentes
+
+Layout e tipografia são feitos com utilitários do Tailwind direto no template. O que se repete em
+várias telas fica na camada `@layer components` do `style.css`:
 
 | Classe | O quê |
 | --- | --- |
-| `.page-header` | `h1` + descrição curta da página |
-| `.panel` | Superfície com borda e padding; uma por seção, nunca aninhada |
-| `.field` / `.field-label` / `.input` | Campo com rótulo visível |
-| `.btn` · `.btn-primary` · `.btn-quiet` · `.btn-danger` | Botões: ação principal, secundária, destrutiva |
-| `.badge` + `.badge-{pending,processing,completed,failed}` | Status com texto e cor semântica |
-| `.muted` · `.hint` · `.error` | Texto secundário, ajuda de campo, erro |
-| `.visually-hidden` | Texto só para leitores de tela |
+| `panel` | Superfície com borda e padding; uma por seção, nunca aninhada |
+| `field-label` / `input` | Rótulo e campo de formulário (rótulo sempre visível) |
+| `btn` · `btn-primary` · `btn-quiet` · `btn-danger` | Botões: ação principal, secundária, destrutiva |
+| `badge` + `badge-{pending,processing,completed,failed}` | Status com texto e cor semântica |
+
+Mapeamento de tokens para classes do Tailwind:
+
+| Token | Classes |
+| --- | --- |
+| Cores (`--color-*`) | `text-ink`, `text-muted`, `text-danger`, `bg-surface`, `bg-bg`, `border-line`, `border-control`, `bg-primary`, `text-on-primary`… |
+| Tipografia | `font-serif`, `font-sans`, `text-sm` … `text-2xl` (já com `line-height`) |
+| Espaço | Escala padrão do Tailwind, em múltiplos de 4px (`gap-4` = 16px, `p-6` = 24px), que é a escala acima |
+| Raio | `rounded-sm` (4px), `rounded-md` (8px) |
+| Largura do conteúdo | `max-w-content` (64rem); leitura longa: `max-w-[70ch]` |
+| Celular | `max-sm:` (abaixo de 40rem) e `sm:` (a partir de 40rem) |
+| Leitor de tela | `sr-only` |
 
 ## Movimento
 

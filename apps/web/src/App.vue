@@ -1,82 +1,35 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
+
+const navLink =
+  'border-b-2 border-transparent pt-4 pb-3.5 font-semibold text-muted no-underline transition-colors duration-150 hover:text-ink'
+const navLinkActive = 'border-primary! text-primary! hover:text-primary'
 </script>
 
 <template>
-  <header class="app-header">
-    <div class="app-header-inner">
-      <RouterLink to="/" class="wordmark">Platform Attorney</RouterLink>
-      <nav aria-label="Principal">
-        <RouterLink to="/clients">Clientes</RouterLink>
-        <RouterLink to="/recordings">Gravações</RouterLink>
+  <header class="border-b border-line bg-surface">
+    <div
+      class="mx-auto flex max-w-content flex-wrap items-center justify-between gap-4 px-4"
+    >
+      <RouterLink
+        to="/"
+        class="py-3 font-serif text-lg font-semibold text-ink no-underline"
+        active-class=""
+        exact-active-class=""
+      >
+        Platform Attorney
+      </RouterLink>
+      <nav aria-label="Principal" class="flex gap-6">
+        <RouterLink to="/clients" :class="navLink" :active-class="navLinkActive">
+          Clientes
+        </RouterLink>
+        <RouterLink to="/recordings" :class="navLink" :active-class="navLinkActive">
+          Gravações
+        </RouterLink>
       </nav>
     </div>
   </header>
-  <main class="app-main">
+  <main class="mx-auto max-w-content px-4 pt-6 pb-12 sm:pt-8">
     <RouterView />
   </main>
 </template>
-
-<style scoped>
-.app-header {
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-line);
-}
-
-.app-header-inner {
-  max-width: var(--content-width);
-  margin: 0 auto;
-  padding: 0 var(--space-4);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.wordmark {
-  font-family: var(--font-serif);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--color-ink);
-  text-decoration: none;
-  padding: var(--space-3) 0;
-}
-
-nav {
-  display: flex;
-  gap: var(--space-6);
-}
-
-nav a {
-  padding: var(--space-4) 0 calc(var(--space-4) - 2px);
-  border-bottom: 2px solid transparent;
-  color: var(--color-muted);
-  font-weight: 600;
-  text-decoration: none;
-  transition:
-    color 150ms,
-    border-color 150ms;
-}
-
-nav a:hover {
-  color: var(--color-ink);
-}
-
-nav a.router-link-active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-}
-
-.app-main {
-  max-width: var(--content-width);
-  margin: 0 auto;
-  padding: var(--space-8) var(--space-4) var(--space-12);
-}
-
-@media (max-width: 40rem) {
-  .app-main {
-    padding-top: var(--space-6);
-  }
-}
-</style>
