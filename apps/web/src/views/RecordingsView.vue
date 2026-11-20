@@ -8,10 +8,12 @@ const { recordings, loading, uploadProgress, error, load, upload, retry, remove,
 
 const statusLabel: Record<RecordingStatus, string> = {
   pending: 'Na fila',
-  processing: 'Transcrevendo…',
-  completed: 'Concluído',
+  processing: 'Transcrevendo',
+  completed: 'Transcrito',
   failed: 'Falhou',
 }
+
+const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' })
 
 async function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
@@ -23,7 +25,7 @@ async function onFileChange(event: Event) {
 
 function formatSize(bytes: number) {
   return bytes >= 1024 * 1024
-    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
     : `${Math.ceil(bytes / 1024)} KB`
 }
 
@@ -35,143 +37,217 @@ function formatDuration(seconds: number | null) {
 }
 
 async function confirmRemove(recording: Recording) {
-  if (confirm(`Remover ${recording.originalName}?`)) await remove(recording.id)
+  if (confirm(`Remover a gravação ${recording.originalName} e a transcrição dela?`)) {
+    await remove(recording.id)
+  }
 }
 
 onMounted(load)
 </script>
 
 <template>
-  <section class="card">
-    <h2>Enviar áudio</h2>
-    <p class="muted">mp3, m4a, wav, ogg, webm… até 25 MB. A transcrição roda em segundo plano.</p>
-    <div class="upload">
-      <input
-        type="file"
-        accept="audio/*"
-        :disabled="uploadProgress !== null"
-        @change="onFileChange"
-      />
-      <span v-if="uploadProgress !== null" class="muted">Enviando… {{ uploadProgress }}%</span>
-    </div>
-    <p v-if="error" class="error">{{ error }}</p>
-  </section>
+  <div class="page">
+    <header class="page-header">
+      <h1>Gravações</h1>
+      <p>Envie o áudio de uma reunião ou audiência e leia a transcrição em português.</p>
+    </header>
 
-  <section class="card">
-    <h2>Gravações</h2>
-    <p v-if="loading && !recordings.length" class="muted">Carregando…</p>
-    <p v-else-if="!recordings.length" class="muted">Nenhum áudio enviado ainda.</p>
-
-    <article v-for="rec in recordings" :key="rec.id" class="recording">
-      <header>
-        <div>
-          <strong>{{ rec.originalName }}</strong>
-          <span class="muted">
-            · {{ formatSize(rec.sizeBytes) }}
-            <template v-if="formatDuration(rec.durationSeconds)">
-              · {{ formatDuration(rec.durationSeconds) }}
-            </template>
-          </span>
+    <section class="section" aria-labelledby="upload-title">
+      <h2 id="upload-title">Enviar áudio</h2>
+      <div class="panel upload">
+        <div class="upload-control">
+          <input
+            id="audio-file"
+            class="visually-hidden file-input"
+            type="file"
+            accept="audio/*"
+            aria-describedby="audio-file-hint"
+            :disabled="uploadProgress !== null"
+            @change="onFileChange"
+          />
+          <label
+            for="audio-file"
+            class="btn btn-primary"
+            :aria-disabled="uploadProgress !== null"
+          >
+            Escolher arquivo de áudio
+          </label>
+          <p id="audio-file-hint" class="hint">
+            MP3, M4A, WAV, OGG ou WEBM, até 25 MB. A transcrição aparece na lista abaixo em
+            alguns segundos.
+          </p>
         </div>
-        <span class="badge" :class="rec.status">{{ statusLabel[rec.status] }}</span>
-      </header>
 
-      <audio :src="audioUrl(rec.id)" controls preload="none" />
-
-      <p v-if="rec.transcript" class="transcript">{{ rec.transcript }}</p>
-      <p v-else-if="rec.status === 'failed'" class="error">{{ rec.error }}</p>
-
-      <div class="actions">
-        <button v-if="rec.status === 'failed'" type="button" @click="retry(rec.id)">
-          Tentar de novo
-        </button>
-        <button type="button" class="danger" @click="confirmRemove(rec)">Remover</button>
+        <div v-if="uploadProgress !== null" class="upload-progress">
+          <label for="upload-progress" class="hint numeric">
+            Enviando… {{ uploadProgress }}%
+          </label>
+          <progress id="upload-progress" max="100" :value="uploadProgress" />
+        </div>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div>
-    </article>
-  </section>
+    </section>
+
+    <section class="section" aria-labelledby="recordings-title">
+      <div class="section-header">
+        <h2 id="recordings-title">Enviadas</h2>
+        <span v-if="recordings.length" class="muted numeric">
+          {{ recordings.length }} {{ recordings.length === 1 ? 'gravação' : 'gravações' }}
+        </span>
+      </div>
+
+      <p v-if="loading && !recordings.length" class="muted">Carregando gravações…</p>
+      <p v-else-if="!recordings.length" class="muted">
+        Nenhum áudio enviado ainda. O primeiro que você enviar aparece aqui.
+      </p>
+
+      <ul v-else class="panel recording-list" role="list">
+        <li v-for="rec in recordings" :key="rec.id" class="recording">
+          <div class="recording-header">
+            <div class="recording-title">
+              <h3>{{ rec.originalName }}</h3>
+              <p class="hint numeric">
+                {{ dateFormat.format(new Date(rec.createdAt)) }} ·
+                {{ formatSize(rec.sizeBytes) }}
+                <template v-if="formatDuration(rec.durationSeconds)">
+                  · {{ formatDuration(rec.durationSeconds) }}
+                </template>
+              </p>
+            </div>
+            <span class="badge" :class="`badge-${rec.status}`">{{ statusLabel[rec.status] }}</span>
+          </div>
+
+          <audio :src="audioUrl(rec.id)" controls preload="none">
+            Seu navegador não reproduz este áudio.
+          </audio>
+
+          <p v-if="rec.transcript" class="transcript">{{ rec.transcript }}</p>
+          <p v-else-if="rec.status === 'failed'" class="error failure">
+            Não foi possível transcrever: {{ rec.error }}
+          </p>
+          <p v-else class="hint">A transcrição aparece aqui quando ficar pronta.</p>
+
+          <div class="recording-actions">
+            <button
+              v-if="rec.status === 'failed'"
+              type="button"
+              class="btn btn-quiet"
+              @click="retry(rec.id)"
+            >
+              Tentar de novo
+            </button>
+            <button type="button" class="btn btn-quiet btn-danger" @click="confirmRemove(rec)">
+              Remover<span class="visually-hidden"> {{ rec.originalName }}</span>
+            </button>
+          </div>
+        </li>
+      </ul>
+    </section>
+  </div>
 </template>
 
 <style scoped>
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.25rem;
-  margin-bottom: 1.25rem;
-}
-h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.1rem;
-}
 .upload {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.upload-control {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  margin-top: 0.75rem;
 }
-.recording {
-  border-top: 1px solid var(--border);
-  padding: 1rem 0;
+
+.upload-control .hint {
+  flex: 1 1 18rem;
+  max-width: 60ch;
+}
+
+/* O input real fica escondido; o rótulo faz o papel de botão e recebe o foco visível. */
+.file-input:focus-visible + label {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+label[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upload-progress {
   display: grid;
-  gap: 0.6rem;
+  gap: var(--space-1);
+  max-width: 24rem;
 }
-.recording:first-of-type {
-  border-top: none;
+
+progress {
+  width: 100%;
+  height: 0.5rem;
+  accent-color: var(--color-primary);
 }
-.recording header {
+
+.recording-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recording {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.recording:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 40rem) {
+  .recording {
+    padding: var(--space-4);
+  }
+}
+
+.recording-header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  flex-wrap: wrap;
+  gap: var(--space-4);
 }
+
+.recording-title {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.recording-title h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
 audio {
   width: 100%;
-  max-width: 480px;
+  max-width: 28rem;
+  height: 2.5rem;
 }
+
 .transcript {
-  margin: 0;
+  max-width: 70ch;
   white-space: pre-wrap;
   line-height: 1.6;
 }
-.badge {
-  font-size: 0.8rem;
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  white-space: nowrap;
+
+.failure {
+  max-width: 70ch;
 }
-.badge.completed {
-  color: var(--primary);
-  border-color: var(--primary);
-}
-.badge.failed {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.actions {
+
+.recording-actions {
   display: flex;
-  gap: 0.5rem;
-}
-button {
-  padding: 0.4rem 0.8rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-}
-button.danger {
-  color: var(--danger);
-}
-.muted {
-  color: var(--muted);
-  margin: 0;
-}
-.error {
-  color: var(--danger);
-  margin: 0.5rem 0 0;
+  gap: var(--space-2);
+  margin-left: calc(var(--space-3) * -1);
 }
 </style>

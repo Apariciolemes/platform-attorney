@@ -3,42 +3,80 @@ import { RouterLink, RouterView } from 'vue-router'
 </script>
 
 <template>
-  <header class="header">
-    <strong>Platform Attorney</strong>
-    <nav>
-      <RouterLink to="/clients">Clientes</RouterLink>
-      <RouterLink to="/recordings">Gravações</RouterLink>
-    </nav>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <RouterLink to="/" class="wordmark">Platform Attorney</RouterLink>
+      <nav aria-label="Principal">
+        <RouterLink to="/clients">Clientes</RouterLink>
+        <RouterLink to="/recordings">Gravações</RouterLink>
+      </nav>
+    </div>
   </header>
-  <main class="container">
+  <main class="app-main">
     <RouterView />
   </main>
 </template>
 
 <style scoped>
-.header {
+.app-header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.app-header-inner {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.9rem 1rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
+
+.wordmark {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-ink);
+  text-decoration: none;
+  padding: var(--space-3) 0;
+}
+
 nav {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-6);
 }
+
 nav a {
-  color: var(--muted);
-  text-decoration: none;
-}
-nav a.router-link-active {
-  color: var(--primary);
+  padding: var(--space-4) 0 calc(var(--space-4) - 2px);
+  border-bottom: 2px solid transparent;
+  color: var(--color-muted);
   font-weight: 600;
+  text-decoration: none;
+  transition:
+    color 150ms,
+    border-color 150ms;
 }
-.container {
-  max-width: 1100px;
-  margin: 1.5rem auto;
-  padding: 0 1rem;
+
+nav a:hover {
+  color: var(--color-ink);
+}
+
+nav a.router-link-active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.app-main {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-4) var(--space-12);
+}
+
+@media (max-width: 40rem) {
+  .app-main {
+    padding-top: var(--space-6);
+  }
 }
 </style>
