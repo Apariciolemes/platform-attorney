@@ -3,9 +3,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { StorageModule } from '@nestjs/storage';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { buildDataSourceOptions } from '../config/database.config.js';
-import { buildQueueConnection } from '../config/queue.config.js';
-import { buildStorageOptions } from '../config/storage.config.js';
+import { buildDataSourceOptions } from '../../config/database.config.js';
+import { buildQueueConnection } from '../../config/queue.config.js';
+import { buildStorageOptions } from '../../config/storage.config.js';
 
 /**
  * Infraestrutura compartilhada pela API HTTP e pelo worker:

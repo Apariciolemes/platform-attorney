@@ -3,7 +3,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TRANSCRIPTION_QUEUE } from './config/queue.config.js';
 import { Recording } from './recordings/entities/recording.entity.js';
-import { InfraModule } from './shared/infra.module.js';
+import { InfraModule } from './shared/infrastructure/infra.module.js';
 import { WhisperTranscriber } from './transcription/whisper-transcriber.js';
 import { TranscriptionProcessor } from './transcription/transcription.processor.js';
 
