@@ -97,4 +97,27 @@ describe('OpenAiSpeechToText', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error).not.toBeInstanceOf(NonRetryableTranscriptionError);
   });
+
+  it('429 por falta de créditos não tem retry e mostra só a mensagem', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            message: 'You have no credits remaining.',
+            type: 'insufficient_quota',
+            code: 'credit_balance_exhausted',
+          },
+        },
+        { status: 429 },
+      ),
+    );
+    const transcriber = new OpenAiSpeechToText(config({ STT_API_KEY: 'key' }));
+
+    const error = await transcriber.transcribe(input).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(NonRetryableTranscriptionError);
+    expect((error as Error).message).toBe(
+      'Serviço de transcrição respondeu 429: You have no credits remaining.',
+    );
+  });
 });

@@ -14,6 +14,23 @@ interface TranscriptionResponse {
   duration?: number;
 }
 
+interface ErrorResponse {
+  error?: { message?: string; type?: string; code?: string };
+}
+
+/** Extrai a mensagem e o tipo do erro no formato da OpenAI; senão usa o corpo cru. */
+function parseErrorBody(body: string): { detail: string; code?: string } {
+  try {
+    const { error } = JSON.parse(body) as ErrorResponse;
+    if (error?.message) {
+      return { detail: error.message, code: error.type ?? error.code };
+    }
+  } catch {
+    // Corpo não é JSON (ex.: proxy, HTML): usa o texto como veio.
+  }
+  return { detail: body.slice(0, 500) };
+}
+
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'whisper-1';
 const REQUEST_TIMEOUT_MS = 120_000;
@@ -65,13 +82,15 @@ export class OpenAiSpeechToText extends SpeechToText {
     });
 
     if (!response.ok) {
-      const body = (await response.text()).slice(0, 500);
-      const message = `Serviço de transcrição respondeu ${response.status}: ${body}`;
+      const { detail, code } = parseErrorBody(await response.text());
+      const message = `Serviço de transcrição respondeu ${response.status}: ${detail}`;
       // 4xx (arquivo inválido, chave errada…) não melhora com retry; 408/429 e 5xx sim.
+      // Exceção: a OpenAI também responde 429 quando a conta está sem créditos.
       const retryable =
-        response.status === 408 ||
-        response.status === 429 ||
-        response.status >= 500;
+        code !== 'insufficient_quota' &&
+        (response.status === 408 ||
+          response.status === 429 ||
+          response.status >= 500);
       throw retryable
         ? new Error(message)
         : new NonRetryableTranscriptionError(message);
