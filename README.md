@@ -9,16 +9,130 @@ Monorepo (pnpm workspaces) com:
 
 A API também tem um **worker** (mesmo código, outro processo) que transcreve áudios com Whisper.
 
-## Arquitetura de upload e transcrição
+## Arquitetura
 
+### Visão geral
+
+```mermaid
+flowchart LR
+    user(["Usuário"]) --> web
+
+    subgraph docker["docker compose"]
+        web["web<br/>nginx + Vue 3"]
+        api["api<br/>NestJS (HTTP)"]
+        worker["worker<br/>NestJS (fila)"]
+        db[("Postgres")]
+        redis[("Redis<br/>fila BullMQ")]
+        storage[("Storage S3<br/>SeaweedFS local")]
+    end
+
+    stt["API de transcrição<br/>OpenAI Whisper"]
+    r2[("Cloudflare R2 / AWS S3<br/>(opcional, nuvem)")]
+
+    web -- "/api (proxy)" --> api
+    api --> db
+    api -- "salva o áudio" --> storage
+    api -- "enfileira job" --> redis
+    redis -- "entrega job" --> worker
+    worker -- "baixa o áudio" --> storage
+    worker -- "salva a transcrição" --> db
+    worker -- "envia o áudio" --> stt
+    storage -. "troca via STORAGE_*" .- r2
 ```
-web ──POST /api/recordings──▶ api ──put──▶ storage S3 (SeaweedFS local | Cloudflare R2 | AWS S3)
-                               │  grava no Postgres (status = pending)
-                               └─ enfileira job ──▶ Redis (BullMQ)
-                                                        │
-worker ◀────────────────────────────────────────────────┘
-  baixa o áudio do storage → OpenAI Whisper → salva a transcrição no Postgres (completed | failed)
+
+API e worker são o **mesmo código** (`apps/api`) com dois entrypoints: `main.ts` (HTTP) e `worker.ts` (consumidor da fila).
+
+### Fluxo de upload e transcrição
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Usuário
+    participant API as api
+    participant S3 as Storage S3
+    participant DB as Postgres
+    participant Q as Redis (BullMQ)
+    participant W as worker
+    participant STT as OpenAI Whisper
+
+    U->>API: POST /api/recordings (áudio até 25 MB)
+    API->>S3: upload do arquivo
+    API->>DB: gravação com status "pending"
+    API->>Q: enfileira "transcribe"
+    API-->>U: 201 { id, status: "pending" }
+
+    Q->>W: entrega o job
+    W->>DB: status "processing"
+    W->>S3: baixa o áudio
+    W->>STT: POST /audio/transcriptions
+    alt sucesso
+        STT-->>W: texto, idioma, duração
+        W->>DB: status "completed" + transcrição
+    else erro temporário (timeout, 429, 5xx)
+        W->>DB: status "pending" (até 3 tentativas, backoff exponencial)
+    else erro definitivo (chave inválida, arquivo recusado) ou última tentativa
+        W->>DB: status "failed" + mensagem de erro
+    end
+
+    loop a cada 3 s enquanto pending/processing
+        U->>API: GET /api/recordings
+    end
 ```
+
+### Camadas da API (Clean Architecture / Ports and Adapters)
+
+Cada contexto (`clients`, `recordings`) é dividido em camadas, e **as dependências sempre apontam para dentro**: o domínio não conhece ninguém; a aplicação só conhece o domínio e as interfaces (ports); a infraestrutura implementa essas interfaces. O diagrama mostra o contexto `recordings`:
+
+```mermaid
+flowchart LR
+    subgraph inbound["Adapters de entrada (infrastructure)"]
+        http["RecordingsController<br/>HTTP"]
+        proc["TranscriptionProcessor<br/>BullMQ"]
+    end
+
+    subgraph app["Aplicação (application)"]
+        uc["Casos de uso<br/>Upload · List · Get · Retry · Delete<br/>Transcribe · RecordTranscriptionFailure"]
+        subgraph ports["Ports (classes abstratas)"]
+            p1["RecordingRepository"]
+            p2["AudioStorage"]
+            p3["TranscriptionQueue"]
+            p4["SpeechToText"]
+        end
+    end
+
+    subgraph domain["Domínio (domain)"]
+        rec["Recording<br/>status: pending → processing → completed / failed"]
+    end
+
+    subgraph outbound["Adapters de saída (infrastructure)"]
+        a1["TypeOrmRecordingRepository<br/>Postgres"]
+        a2["S3AudioStorage<br/>SeaweedFS / R2 / S3"]
+        a3["BullMqTranscriptionQueue<br/>Redis"]
+        a4["OpenAiSpeechToText<br/>OpenAI / Groq / Whisper local"]
+    end
+
+    http --> uc
+    proc --> uc
+    uc --> rec
+    uc --> ports
+    a1 -. implementa .-> p1
+    a2 -. implementa .-> p2
+    a3 -. implementa .-> p3
+    a4 -. implementa .-> p4
+```
+
+| Camada | Conteúdo | Pode depender de |
+| --- | --- | --- |
+| `domain/` | Entidades com as regras de negócio (ex.: quando uma gravação pode ser reprocessada) e erros de domínio | Nada além da biblioteca padrão do Node |
+| `application/` | Casos de uso (`*.use-case.ts`) e **ports** (`ports/`): classes abstratas para tudo o que vem de fora | `domain` |
+| `infrastructure/` | **Adapters**: TypeORM, S3, BullMQ, OpenAI (saída) e controllers HTTP / processor da fila (entrada) | `application`, `domain`, frameworks |
+| `*.module.ts` | Composition root: liga cada port ao seu adapter | Tudo |
+
+- **Trocar uma tecnologia é escrever um adapter**: outro serviço de transcrição, por exemplo, é uma nova classe que estende `SpeechToText` mais uma linha no módulo. Os casos de uso não mudam.
+- **Erros de domínio** (`NotFoundError`, `ConflictError`) são traduzidos para 404/409 pelo `DomainErrorFilter`; os casos de uso não conhecem HTTP.
+- **Testes**: os casos de uso rodam com adapters em memória, sem banco, Redis, S3 ou Nest.
+
+### Detalhes de infraestrutura
 
 - Storage via [`@nestjs/storage`](https://docs.nestjs.com/application/file-storage) (`S3Disk`): o mesmo código fala com qualquer storage compatível com S3. Trocar de provedor é só mudar as variáveis `STORAGE_*`.
 - Fila via [`@nestjs/bullmq`](https://docs.nestjs.com/application/queues): 3 tentativas com backoff exponencial. Erros que não melhoram com retry (chave inválida, arquivo inválido) falham na hora.
@@ -153,15 +267,25 @@ pnpm --filter api migration:revert
 
 ## Estrutura
 
+Veja as camadas em [Camadas da API](#camadas-da-api-clean-architecture--ports-and-adapters).
+
 ```
 apps/
   api/src/
     config/                     # database, storage (S3) e fila (Redis)
-    shared/infra.module.ts      # infra compartilhada pela API e pelo worker
     database/                   # DataSource da CLI + migrations
-    clients/                    # módulo de exemplo (CRUD)
-    recordings/                 # upload, listagem e streaming de áudios
-    transcription/              # processor da fila + cliente Whisper (API OpenAI)
+    shared/
+      domain/                   # erros de domínio base
+      infrastructure/           # InfraModule (banco, storage, fila) + filtro HTTP
+    clients/                    # contexto de exemplo (CRUD)
+      domain/ application/ infrastructure/ clients.module.ts
+    recordings/                 # upload, streaming e transcrição de áudios
+      domain/                   # Recording + erros
+      application/ports/        # RecordingRepository, AudioStorage, TranscriptionQueue, SpeechToText
+      application/use-cases/    # upload, list, get, retry, delete, transcribe, record-failure
+      infrastructure/           # persistence/ storage/ queue/ stt/ http/
+      recordings.module.ts      # composition root da API HTTP
+      recordings-worker.module.ts  # composition root do worker
     main.ts                     # entrypoint HTTP
     worker.ts                   # entrypoint do worker
   web/src/
