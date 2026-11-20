@@ -151,6 +151,7 @@ docker compose up -d --build
 | Frontend      | http://localhost:8080 (página **Gravações**)          |
 | API           | http://localhost:3000/api                             |
 | Health        | http://localhost:3000/api/health                      |
+| Swagger       | http://localhost:3000/api/docs (JSON em `/api/docs-json`) |
 | Postgres      | `localhost:5432` (postgres/postgres)                  |
 | Storage S3    | `http://localhost:8333` (devaccesskey/devsecretkey)   |
 | Redis         | `localhost:6379`                                      |
@@ -165,6 +166,8 @@ curl http://localhost:3000/api/recordings/<id>                           # até 
 ```
 
 ### Endpoints
+
+A documentação completa e interativa (com schemas, exemplos e "Try it out", inclusive o upload) está no **Swagger**: http://localhost:3000/api/docs, também acessível pelo frontend em http://localhost:8080/api/docs. O JSON OpenAPI em `/api/docs-json` pode gerar clientes HTTP. Para desligar, por exemplo em produção, use `SWAGGER_ENABLED=false`.
 
 | Método | Rota                          | Descrição                                     |
 | ------ | ----------------------------- | --------------------------------------------- |

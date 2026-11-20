@@ -16,18 +16,40 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { serveFile, StorageDisk } from '@nestjs/storage';
+import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiConflictResponse,
+  ApiConsumes,
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiPayloadTooLargeResponse,
+  ApiProduces,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import { ErrorResponseDto } from '../../../shared/infrastructure/http/error-response.dto.js';
 import { DeleteRecordingUseCase } from '../../application/use-cases/delete-recording.use-case.js';
 import { GetRecordingUseCase } from '../../application/use-cases/get-recording.use-case.js';
 import { ListRecordingsUseCase } from '../../application/use-cases/list-recordings.use-case.js';
 import { RetryRecordingUseCase } from '../../application/use-cases/retry-recording.use-case.js';
 import { UploadRecordingUseCase } from '../../application/use-cases/upload-recording.use-case.js';
+import { RecordingResponseDto } from './dto/recording-response.dto.js';
+import { UploadRecordingDto } from './dto/upload-recording.dto.js';
 import { presentRecording } from './recording.presenter.js';
 
 /** Limite de arquivo da API de transcrição (OpenAI e Groq aceitam até 25 MB). */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+const RecordingIdParam = () =>
+  ApiParam({ name: 'id', format: 'uuid', description: 'Id da gravação' });
+
 /** Adapter de entrada HTTP: valida a requisição, chama o caso de uso e formata a resposta. */
+@ApiTags('recordings')
 @Controller('recordings')
 export class RecordingsController {
   constructor(
@@ -40,21 +62,50 @@ export class RecordingsController {
   ) {}
 
   @Get()
-  async findAll() {
+  @ApiOperation({
+    summary: 'Lista as gravações, da mais recente à mais antiga',
+  })
+  @ApiOkResponse({ type: [RecordingResponseDto] })
+  async findAll(): Promise<RecordingResponseDto[]> {
     const recordings = await this.listRecordings.execute();
     return recordings.map(presentRecording);
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  @ApiOperation({
+    summary: 'Busca uma gravação',
+    description:
+      'Use para acompanhar a transcrição: o status vai de pending a completed (ou failed).',
+  })
+  @RecordingIdParam()
+  @ApiOkResponse({ type: RecordingResponseDto })
+  @ApiNotFoundResponse({ type: ErrorResponseDto })
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<RecordingResponseDto> {
     return presentRecording(await this.getRecording.execute(id));
   }
 
-  /** multipart/form-data com o campo "file". Responde 413 acima de 25 MB. */
   @Post()
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
   )
+  @ApiOperation({
+    summary: 'Envia um áudio para transcrição',
+    description:
+      'Guarda o arquivo, cria a gravação com status pending e agenda a transcrição em segundo plano.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: UploadRecordingDto })
+  @ApiCreatedResponse({ type: RecordingResponseDto })
+  @ApiBadRequestResponse({
+    type: ErrorResponseDto,
+    description: 'Arquivo ausente ou que não é áudio',
+  })
+  @ApiPayloadTooLargeResponse({
+    type: ErrorResponseDto,
+    description: 'Arquivo acima de 25 MB',
+  })
   async upload(
     @UploadedFile(
       new ParseFilePipe({
@@ -70,7 +121,7 @@ export class RecordingsController {
       }),
     )
     file: Express.Multer.File,
-  ) {
+  ): Promise<RecordingResponseDto> {
     const recording = await this.uploadRecording.execute({
       originalName: file.originalname,
       mimeType: file.mimetype,
@@ -86,6 +137,18 @@ export class RecordingsController {
    * em vez de passar o arquivo inteiro pelo port AudioStorage.
    */
   @Get(':id/audio')
+  @ApiOperation({
+    summary: 'Baixa o áudio original',
+    description:
+      'Aceita o header Range (resposta 206), usado pelo player do navegador.',
+  })
+  @RecordingIdParam()
+  @ApiProduces('audio/*')
+  @ApiOkResponse({
+    description: 'Conteúdo do áudio, com o Content-Type original.',
+    schema: { type: 'string', format: 'binary' },
+  })
+  @ApiNotFoundResponse({ type: ErrorResponseDto })
   async audio(
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
@@ -101,13 +164,29 @@ export class RecordingsController {
   }
 
   @Post(':id/retry')
-  async retry(@Param('id', ParseUUIDPipe) id: string) {
+  @ApiOperation({
+    summary: 'Reenfileira a transcrição de uma gravação que falhou',
+  })
+  @RecordingIdParam()
+  @ApiCreatedResponse({ type: RecordingResponseDto })
+  @ApiNotFoundResponse({ type: ErrorResponseDto })
+  @ApiConflictResponse({
+    type: ErrorResponseDto,
+    description: 'Gravação em andamento ou já transcrita',
+  })
+  async retry(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<RecordingResponseDto> {
     return presentRecording(await this.retryRecording.execute(id));
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  @ApiOperation({ summary: 'Remove a gravação, o áudio e a transcrição' })
+  @RecordingIdParam()
+  @ApiNoContentResponse({ description: 'Gravação removida' })
+  @ApiNotFoundResponse({ type: ErrorResponseDto })
+  remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.deleteRecording.execute(id);
   }
 }

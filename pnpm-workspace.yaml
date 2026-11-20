@@ -4,3 +4,5 @@ packages:
 allowBuilds:
   # Aceleração nativa opcional do BullMQ; o fallback em JS é suficiente.
   msgpackr-extract: false
+  # Telemetria que vem com o swagger-ui-dist; desativada.
+  "@scarf/scarf": false
