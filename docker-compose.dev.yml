@@ -1,0 +1,22 @@
+# Sobrescreve o docker-compose.yml para desenvolvimento com hot reload:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  api:
+    build:
+      target: dev
+    environment:
+      NODE_ENV: development
+      CORS_ORIGIN: http://localhost:5173
+    volumes:
+      - ./apps/api/src:/repo/apps/api/src
+
+  web:
+    build:
+      target: dev
+    environment:
+      VITE_API_PROXY_TARGET: http://api:3000
+    ports: !override
+      - "${WEB_DEV_PORT:-5173}:5173"
+    volumes:
+      - ./apps/web/src:/repo/apps/web/src
+      - ./apps/web/index.html:/repo/apps/web/index.html
