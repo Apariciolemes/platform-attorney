@@ -186,7 +186,16 @@ A documentação completa e interativa (com schemas, exemplos e "Try it out", in
 2. Ainda em **Billing → Limits**, defina um limite de gasto mensal baixo (ex.: US$5) para não ter surpresas.
 3. Em **API keys** → **Create new secret key**, crie a chave e copie-a. Ela só aparece uma vez.
 4. No `.env`: `STT_API_KEY=sk-...`, depois rode `docker compose up -d worker`.
-5. Opcional: `TRANSCRIPTION_LANGUAGE=pt` fixa o idioma (melhora a precisão). `STT_MODEL=gpt-4o-mini-transcribe` costuma ser mais barato, mas não devolve idioma nem duração.
+5. Opcional: `TRANSCRIPTION_LANGUAGE=pt` fixa o idioma (melhora a precisão).
+
+**Modelo de transcrição** (`STT_MODEL`):
+
+| Modelo | Preço | Observação |
+| --- | --- | --- |
+| `whisper-1` (padrão) | US$ 0,006/min | A OpenAI vai desligá-lo em **26/02/2027** |
+| `gpt-transcribe` | US$ 0,0045/min | Substituto indicado pela OpenAI, 25% mais barato. Já suportado: basta `STT_MODEL=gpt-transcribe` e `docker compose up -d api worker` |
+
+Com o `gpt-transcribe`, a duração usada nos custos é a que a OpenAI cobra (`usage.seconds`, arredondada para cima ao segundo). Modelos cobrados por token, como `gpt-4o-transcribe`, não informam a duração, então a página de custos não consegue estimar a transcrição deles.
 
 Sem a chave, as gravações ficam com status `failed` e a mensagem `STT_API_KEY não configurada`. Depois de configurar, use "Tentar de novo".
 
