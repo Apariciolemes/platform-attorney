@@ -1,21 +1,10 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { RecordingStatus } from '../../domain/recording.js';
 
-export enum RecordingStatus {
-  Pending = 'pending',
-  Processing = 'processing',
-  Completed = 'completed',
-  Failed = 'failed',
-}
-
+/** Modelo de tabela do TypeORM. O domínio usa `Recording`; a conversão fica no repositório. */
 @Entity('recordings')
-export class Recording {
-  @PrimaryGeneratedColumn('uuid')
+export class RecordingOrmEntity {
+  @PrimaryColumn('uuid')
   id: string;
 
   @Column({ name: 'original_name', length: 255 })
@@ -34,7 +23,6 @@ export class Recording {
     type: 'enum',
     enum: RecordingStatus,
     enumName: 'recordings_status_enum',
-    default: RecordingStatus.Pending,
   })
   status: RecordingStatus;
 
@@ -54,9 +42,9 @@ export class Recording {
   @Column({ type: 'text', nullable: true })
   error: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @Column({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  @Column({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }

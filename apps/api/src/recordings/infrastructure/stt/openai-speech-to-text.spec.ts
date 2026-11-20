@@ -1,6 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
-import { UnrecoverableError } from 'bullmq';
-import { WhisperTranscriber } from './whisper-transcriber.js';
+import { NonRetryableTranscriptionError } from '../../application/ports/speech-to-text.js';
+import { OpenAiSpeechToText } from './openai-speech-to-text.js';
 
 const config = (values: Record<string, string | undefined>) =>
   ({ get: (key: string) => values[key] }) as unknown as ConfigService;
@@ -11,7 +11,7 @@ const input = {
   mimeType: 'audio/mpeg',
 };
 
-describe('WhisperTranscriber', () => {
+describe('OpenAiSpeechToText', () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
@@ -31,7 +31,7 @@ describe('WhisperTranscriber', () => {
         duration: 3,
       }),
     );
-    const transcriber = new WhisperTranscriber(
+    const transcriber = new OpenAiSpeechToText(
       config({ STT_API_KEY: 'key', TRANSCRIPTION_LANGUAGE: 'pt' }),
     );
 
@@ -54,7 +54,7 @@ describe('WhisperTranscriber', () => {
 
   it('usa STT_BASE_URL e json para modelos que não são Whisper', async () => {
     fetchMock.mockResolvedValue(Response.json({ text: 'oi' }));
-    const transcriber = new WhisperTranscriber(
+    const transcriber = new OpenAiSpeechToText(
       config({
         STT_API_KEY: 'key',
         STT_BASE_URL: 'https://api.groq.com/openai/v1/',
@@ -75,26 +75,26 @@ describe('WhisperTranscriber', () => {
   });
 
   it('falha sem retry quando não há chave', async () => {
-    const transcriber = new WhisperTranscriber(config({}));
+    const transcriber = new OpenAiSpeechToText(config({}));
     await expect(transcriber.transcribe(input)).rejects.toBeInstanceOf(
-      UnrecoverableError,
+      NonRetryableTranscriptionError,
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('erro 4xx é irrecuperável', async () => {
     fetchMock.mockResolvedValue(new Response('invalid file', { status: 400 }));
-    const transcriber = new WhisperTranscriber(config({ STT_API_KEY: 'key' }));
+    const transcriber = new OpenAiSpeechToText(config({ STT_API_KEY: 'key' }));
     await expect(transcriber.transcribe(input)).rejects.toBeInstanceOf(
-      UnrecoverableError,
+      NonRetryableTranscriptionError,
     );
   });
 
   it('429 e 5xx permitem retry', async () => {
     fetchMock.mockResolvedValue(new Response('slow down', { status: 429 }));
-    const transcriber = new WhisperTranscriber(config({ STT_API_KEY: 'key' }));
+    const transcriber = new OpenAiSpeechToText(config({ STT_API_KEY: 'key' }));
     const error = await transcriber.transcribe(input).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(Error);
-    expect(error).not.toBeInstanceOf(UnrecoverableError);
+    expect(error).not.toBeInstanceOf(NonRetryableTranscriptionError);
   });
 });

@@ -1,18 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UnrecoverableError } from 'bullmq';
-
-export interface TranscriptionInput {
-  audio: Buffer;
-  filename: string;
-  mimeType: string;
-}
-
-export interface TranscriptionResult {
-  text: string;
-  language: string | null;
-  durationSeconds: number | null;
-}
+import {
+  NonRetryableTranscriptionError,
+  SpeechToText,
+  type SpeechToTextInput,
+} from '../../application/ports/speech-to-text.js';
+import type { Transcript } from '../../domain/recording.js';
 
 interface TranscriptionResponse {
   text: string;
@@ -26,19 +19,20 @@ const DEFAULT_MODEL = 'whisper-1';
 const REQUEST_TIMEOUT_MS = 120_000;
 
 /**
- * Cliente do endpoint `POST /audio/transcriptions` no formato da API da OpenAI.
- * Padrão: OpenAI Whisper. Com STT_BASE_URL, funciona com qualquer serviço compatível
- * (Groq: https://api.groq.com/openai/v1, ou um Whisper local).
+ * Adapter: implementa o port SpeechToText com o endpoint `POST /audio/transcriptions`
+ * no formato da API da OpenAI. Padrão: OpenAI Whisper. Com STT_BASE_URL, funciona com
+ * qualquer serviço compatível (Groq: https://api.groq.com/openai/v1, ou um Whisper local).
  */
 @Injectable()
-export class WhisperTranscriber {
-  constructor(private readonly config: ConfigService) {}
+export class OpenAiSpeechToText extends SpeechToText {
+  constructor(private readonly config: ConfigService) {
+    super();
+  }
 
-  async transcribe(input: TranscriptionInput): Promise<TranscriptionResult> {
+  async transcribe(input: SpeechToTextInput): Promise<Transcript> {
     const apiKey = this.config.get<string>('STT_API_KEY');
     if (!apiKey) {
-      // Tentar de novo não resolve: falha a gravação na hora.
-      throw new UnrecoverableError('STT_API_KEY não configurada');
+      throw new NonRetryableTranscriptionError('STT_API_KEY não configurada');
     }
     const baseUrl = (
       this.config.get<string>('STT_BASE_URL') || DEFAULT_BASE_URL
@@ -78,7 +72,9 @@ export class WhisperTranscriber {
         response.status === 408 ||
         response.status === 429 ||
         response.status >= 500;
-      throw retryable ? new Error(message) : new UnrecoverableError(message);
+      throw retryable
+        ? new Error(message)
+        : new NonRetryableTranscriptionError(message);
     }
 
     const data = (await response.json()) as TranscriptionResponse;
