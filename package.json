@@ -2,7 +2,7 @@
   "name": "platform-attorney",
   "private": true,
   "scripts": {
-    "dev": "pnpm -r --parallel --filter api --filter web run dev",
+    "dev": "pnpm -r --parallel run \"/^dev(:worker)?$/\"",
     "dev:api": "pnpm --filter api start:dev",
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm -r run build",
@@ -10,7 +10,8 @@
     "test": "pnpm --filter api test",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "docker:logs": "docker compose logs -f",
+    "dev:worker": "pnpm --filter api dev:worker"
   },
   "packageManager": "pnpm@12.8.1"
 }

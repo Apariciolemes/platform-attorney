@@ -25,7 +25,9 @@
     "migration:run": "pnpm build && pnpm typeorm migration:run",
     "migration:revert": "pnpm build && pnpm typeorm migration:revert",
     "migration:generate": "pnpm build && pnpm typeorm migration:generate",
-    "migration:create": "typeorm migration:create"
+    "migration:create": "typeorm migration:create",
+    "dev:worker": "nest start --watch --path tsconfig.worker.json --entryFile worker",
+    "start:worker": "node dist/worker.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "^12.0.2",
