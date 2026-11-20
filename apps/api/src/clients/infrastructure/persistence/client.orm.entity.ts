@@ -1,14 +1,9 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
+/** Modelo de tabela do TypeORM. O domínio usa `Client`; a conversão fica no ClientMapper. */
 @Entity('clients')
-export class Client {
-  @PrimaryGeneratedColumn('uuid')
+export class ClientOrmEntity {
+  @PrimaryColumn('uuid')
   id: string;
 
   @Column({ length: 150 })
@@ -23,9 +18,9 @@ export class Client {
   @Column({ type: 'varchar', length: 20, nullable: true })
   phone: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @Column({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  @Column({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
