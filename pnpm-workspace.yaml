@@ -1,2 +1,6 @@
 packages:
   - "apps/*"
+
+allowBuilds:
+  # Aceleração nativa opcional do BullMQ; o fallback em JS é suficiente.
+  msgpackr-extract: false
