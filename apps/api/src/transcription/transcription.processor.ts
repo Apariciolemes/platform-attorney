@@ -13,7 +13,7 @@ import {
   Recording,
   RecordingStatus,
 } from '../recordings/entities/recording.entity.js';
-import { GroqTranscriber } from './groq-transcriber.js';
+import { WhisperTranscriber } from './whisper-transcriber.js';
 
 @Processor(TRANSCRIPTION_QUEUE)
 export class TranscriptionProcessor extends WorkerHost {
@@ -23,7 +23,7 @@ export class TranscriptionProcessor extends WorkerHost {
     @InjectRepository(Recording)
     private readonly recordingsRepository: Repository<Recording>,
     private readonly disk: StorageDisk,
-    private readonly transcriber: GroqTranscriber,
+    private readonly transcriber: WhisperTranscriber,
   ) {
     super();
   }

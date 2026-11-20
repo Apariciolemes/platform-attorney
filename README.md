@@ -17,17 +17,18 @@ web ──POST /api/recordings──▶ api ──put──▶ storage S3 (Seawe
                                └─ enfileira job ──▶ Redis (BullMQ)
                                                         │
 worker ◀────────────────────────────────────────────────┘
-  baixa o áudio do storage → Groq Whisper → salva a transcrição no Postgres (completed | failed)
+  baixa o áudio do storage → OpenAI Whisper → salva a transcrição no Postgres (completed | failed)
 ```
 
 - Storage via [`@nestjs/storage`](https://docs.nestjs.com/application/file-storage) (`S3Disk`): o mesmo código fala com qualquer storage compatível com S3. Trocar de provedor é só mudar as variáveis `STORAGE_*`.
 - Fila via [`@nestjs/bullmq`](https://docs.nestjs.com/application/queues): 3 tentativas com backoff exponencial. Erros que não melhoram com retry (chave inválida, arquivo inválido) falham na hora.
-- Upload limitado a **25 MB**, o limite de arquivo do plano gratuito da Groq.
+- Transcrição via qualquer API no formato da OpenAI (`/audio/transcriptions`). O padrão é a OpenAI; trocar de provedor é só mudar as variáveis `STT_*`.
+- Upload limitado a **25 MB**, o limite de arquivo da API de transcrição.
 
 ## Subir tudo com Docker
 
 ```bash
-cp .env.example .env        # preencha GROQ_API_KEY (veja abaixo)
+cp .env.example .env        # preencha STT_API_KEY (veja abaixo)
 docker compose up -d --build
 ```
 
@@ -60,14 +61,17 @@ curl http://localhost:3000/api/recordings/<id>                           # até 
 | POST   | `/api/recordings/:id/retry`   | Reenfileira uma gravação que falhou           |
 | DELETE | `/api/recordings/:id`         | Apaga o arquivo do storage e o registro       |
 
-## Chave da Groq (transcrição)
+## Chave da OpenAI (transcrição)
 
-1. Crie uma conta em https://console.groq.com (o plano gratuito basta).
-2. Vá em **API Keys** → **Create API Key** e copie a chave.
-3. No `.env`: `GROQ_API_KEY=gsk_...`.
-4. Opcional: `GROQ_STT_MODEL=whisper-large-v3-turbo` é mais rápido; `whisper-large-v3` (padrão) é mais preciso. `TRANSCRIPTION_LANGUAGE=pt` fixa o idioma.
+1. Crie uma conta em https://platform.openai.com e adicione um cartão em **Settings → Billing**. A API é paga por uso: o `whisper-1` custa cerca de US$0,006 por minuto de áudio, então 1 hora sai por uns US$0,36.
+2. Ainda em **Billing → Limits**, defina um limite de gasto mensal baixo (ex.: US$5) para não ter surpresas.
+3. Em **API keys** → **Create new secret key**, crie a chave e copie-a. Ela só aparece uma vez.
+4. No `.env`: `STT_API_KEY=sk-...`, depois rode `docker compose up -d worker`.
+5. Opcional: `TRANSCRIPTION_LANGUAGE=pt` fixa o idioma (melhora a precisão). `STT_MODEL=gpt-4o-mini-transcribe` costuma ser mais barato, mas não devolve idioma nem duração.
 
-Sem a chave, as gravações ficam com status `failed` e a mensagem `GROQ_API_KEY não configurada`. Depois de configurar, use "Tentar de novo".
+Sem a chave, as gravações ficam com status `failed` e a mensagem `STT_API_KEY não configurada`. Depois de configurar, use "Tentar de novo".
+
+**Outros provedores compatíveis**: basta mudar `STT_BASE_URL`, `STT_API_KEY` e `STT_MODEL`. Por exemplo, a Groq (plano gratuito) usa `STT_BASE_URL=https://api.groq.com/openai/v1` e `STT_MODEL=whisper-large-v3`; um Whisper local compatível com a API da OpenAI usa a URL do container.
 
 ## Usar o Cloudflare R2 (storage na nuvem, 10 GB grátis)
 
@@ -157,7 +161,7 @@ apps/
     database/                   # DataSource da CLI + migrations
     clients/                    # módulo de exemplo (CRUD)
     recordings/                 # upload, listagem e streaming de áudios
-    transcription/              # processor da fila + cliente Groq Whisper
+    transcription/              # processor da fila + cliente Whisper (API OpenAI)
     main.ts                     # entrypoint HTTP
     worker.ts                   # entrypoint do worker
   web/src/

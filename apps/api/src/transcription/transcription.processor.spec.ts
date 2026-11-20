@@ -6,7 +6,7 @@ import {
   Recording,
   RecordingStatus,
 } from '../recordings/entities/recording.entity.js';
-import type { GroqTranscriber } from './groq-transcriber.js';
+import type { WhisperTranscriber } from './whisper-transcriber.js';
 import { TranscriptionProcessor } from './transcription.processor.js';
 
 const job = (attemptsMade = 1, attempts = 3) =>
@@ -29,7 +29,7 @@ describe('TranscriptionProcessor', () => {
     processor = new TranscriptionProcessor(
       repo as unknown as Repository<Recording>,
       disk,
-      transcriber as unknown as GroqTranscriber,
+      transcriber as unknown as WhisperTranscriber,
     );
   });
 

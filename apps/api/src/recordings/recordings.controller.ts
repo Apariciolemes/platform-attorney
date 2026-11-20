@@ -19,7 +19,7 @@ import { serveFile, StorageDisk } from '@nestjs/storage';
 import type { Request, Response } from 'express';
 import { RecordingsService } from './recordings.service.js';
 
-/** Limite de arquivo do plano gratuito da Groq. */
+/** Limite de arquivo da API de transcrição (OpenAI e Groq aceitam até 25 MB). */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 @Controller('recordings')
