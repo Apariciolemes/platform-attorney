@@ -176,6 +176,8 @@ A documentação completa e interativa (com schemas, exemplos e "Try it out", in
 | GET    | `/api/recordings/:id`         | Detalhe de uma gravação                       |
 | GET    | `/api/recordings/:id/audio`   | Streaming do áudio (suporta Range)            |
 | POST   | `/api/recordings/:id/retry`   | Reenfileira uma gravação que falhou           |
+| POST   | `/api/recordings/:id/correction` | Pede (de novo) a revisão do texto por IA   |
+| GET    | `/api/costs`                  | Preços e custo estimado de cada gravação      |
 | DELETE | `/api/recordings/:id`         | Apaga o arquivo do storage e o registro       |
 
 ## Chave da OpenAI (transcrição)
@@ -189,6 +191,25 @@ A documentação completa e interativa (com schemas, exemplos e "Try it out", in
 Sem a chave, as gravações ficam com status `failed` e a mensagem `STT_API_KEY não configurada`. Depois de configurar, use "Tentar de novo".
 
 **Outros provedores compatíveis**: basta mudar `STT_BASE_URL`, `STT_API_KEY` e `STT_MODEL`. Por exemplo, a Groq (plano gratuito) usa `STT_BASE_URL=https://api.groq.com/openai/v1` e `STT_MODEL=whisper-large-v3`; um Whisper local compatível com a API da OpenAI usa a URL do container.
+
+## Revisão do texto por IA
+
+Depois da transcrição, o worker envia o texto para um modelo da OpenAI (`gpt-6-luna`, pela Responses API), que corrige concordância, pontuação e ortografia, tira vícios de fala ("tipo", "tá ligado"…) e organiza em parágrafos, **sem mudar o sentido nem os fatos** (nomes, números, datas, valores). As instruções ficam em `apps/api/src/recordings/infrastructure/correction/correction-prompt.ts`.
+
+- A transcrição original continua guardada. Na tela da gravação dá para alternar entre **Revisado** e **Original**.
+- Se a revisão falhar, a transcrição original continua valendo, e dá para pedir de novo pela tela ("Tentar revisar de novo").
+- Usa a mesma chave da transcrição (`STT_API_KEY`). Para usar outra, defina `CORRECTION_API_KEY`. Para desligar, `CORRECTION_ENABLED=false`.
+- O conteúdo não fica guardado na OpenAI (`store: false`).
+- Custo: cerca de US$ 0,0007 para revisar 4,5 minutos de áudio, ou seja, menos de 1 centavo de dólar por hora de áudio.
+
+## Página de custos
+
+Em http://localhost:8080/costs:
+- **Preço atual** por minuto de áudio (tabela oficial da OpenAI, com a data em que foi conferida) e aviso de desligamento do modelo, se houver.
+- **Simulador**: custo por duração, com conversão opcional para reais (a cotação fica salva no navegador).
+- **Gasto até agora**: custo estimado de cada gravação, separado em transcrição (pela duração) e revisão (pelos tokens realmente gastos).
+
+Para outro provedor de transcrição, ou se a OpenAI mudar o preço, defina `STT_PRICE_PER_MINUTE_USD`. A fatura real fica em https://platform.openai.com/usage.
 
 ## Usar o Cloudflare R2 (storage na nuvem, 10 GB grátis)
 
@@ -282,7 +303,7 @@ apps/
       infrastructure/           # InfraModule (banco, storage, fila) + filtro HTTP
     clients/                    # contexto de exemplo (CRUD)
       domain/ application/ infrastructure/ clients.module.ts
-    recordings/                 # upload, streaming e transcrição de áudios
+    recordings/                 # upload, streaming, transcrição, revisão por IA e custos
       domain/                   # Recording + erros
       application/ports/        # RecordingRepository, AudioStorage, TranscriptionQueue, SpeechToText
       application/use-cases/    # upload, list, get, retry, delete, transcribe, record-failure
