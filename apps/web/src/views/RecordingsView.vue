@@ -1,19 +1,12 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useRecordings } from '@/composables/useRecordings'
-import type { Recording, RecordingStatus } from '@/types/recording'
+import type { Recording } from '@/types/recording'
+import { dateTimeFormat, formatDuration } from '@/utils/format'
+import { readableText, recordingStage, stageBadgeClass } from '@/utils/recording-stage'
 
-const { recordings, loading, uploadProgress, error, load, upload, retry, remove, audioUrl } =
-  useRecordings()
-
-const statusLabel: Record<RecordingStatus, string> = {
-  pending: 'Na fila',
-  processing: 'Transcrevendo',
-  completed: 'Transcrito',
-  failed: 'Falhou',
-}
-
-const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' })
+const { recordings, loading, uploadProgress, error, load, upload, retry, remove } = useRecordings()
 
 async function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
@@ -27,13 +20,6 @@ function formatSize(bytes: number) {
   return bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
     : `${Math.ceil(bytes / 1024)} KB`
-}
-
-function formatDuration(seconds: number | null) {
-  if (seconds == null) return null
-  const m = Math.floor(seconds / 60)
-  const s = Math.round(seconds % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 async function confirmRemove(recording: Recording) {
@@ -50,7 +36,7 @@ onMounted(load)
     <header class="grid gap-2">
       <h1 class="text-2xl">Gravações</h1>
       <p class="max-w-[60ch] text-muted">
-        Envie o áudio de uma reunião ou audiência e leia a transcrição em português.
+        Envie o áudio de uma reunião ou audiência. A transcrição é revisada por IA e fica pronta para leitura.
       </p>
     </header>
 
@@ -110,34 +96,51 @@ onMounted(load)
       </p>
 
       <ul v-else class="panel m-0 list-none divide-y divide-line p-0!" role="list">
-        <li v-for="rec in recordings" :key="rec.id" class="grid gap-3 p-4 sm:p-6">
+        <li
+          v-for="rec in recordings"
+          :key="rec.id"
+          class="relative grid gap-2 p-4 transition-colors duration-150 hover:bg-bg sm:p-6"
+        >
           <div class="flex items-start justify-between gap-4">
             <div class="grid min-w-0 gap-1">
-              <h3 class="font-sans text-base wrap-anywhere">{{ rec.originalName }}</h3>
+              <h3 class="font-sans text-base wrap-anywhere">
+                <!-- O link cobre o item inteiro (::after), mas os botões ficam por cima. -->
+                <RouterLink
+                  :to="`/recordings/${rec.id}`"
+                  class="text-ink no-underline after:absolute after:inset-0 hover:underline"
+                >
+                  {{ rec.originalName }}
+                </RouterLink>
+              </h3>
               <p class="text-sm text-muted tabular-nums">
-                {{ dateFormat.format(new Date(rec.createdAt)) }} ·
+                {{ dateTimeFormat.format(new Date(rec.createdAt)) }} ·
                 {{ formatSize(rec.sizeBytes) }}
-                <template v-if="formatDuration(rec.durationSeconds)">
+                <template v-if="rec.durationSeconds != null">
                   · {{ formatDuration(rec.durationSeconds) }}
                 </template>
               </p>
             </div>
-            <span class="badge" :class="`badge-${rec.status}`">{{ statusLabel[rec.status] }}</span>
+            <span class="badge" :class="stageBadgeClass[recordingStage(rec).tone]">
+              {{ recordingStage(rec).label }}
+            </span>
           </div>
 
-          <audio class="h-10 w-full max-w-md" :src="audioUrl(rec.id)" controls preload="none">
-            Seu navegador não reproduz este áudio.
-          </audio>
-
-          <p v-if="rec.transcript" class="max-w-[70ch] leading-relaxed whitespace-pre-wrap">
-            {{ rec.transcript }}
+          <p v-if="readableText(rec)" class="line-clamp-3 max-w-[70ch] text-muted">
+            {{ readableText(rec) }}
           </p>
           <p v-else-if="rec.status === 'failed'" class="max-w-[70ch] text-danger">
             Não foi possível transcrever: {{ rec.error }}
           </p>
           <p v-else class="text-sm text-muted">A transcrição aparece aqui quando ficar pronta.</p>
 
-          <div class="-ml-3 flex gap-2">
+          <div class="relative -ml-3 flex flex-wrap gap-2">
+            <RouterLink
+              v-if="rec.transcript"
+              :to="`/recordings/${rec.id}`"
+              class="btn btn-quiet text-primary no-underline"
+            >
+              Ler transcrição<span class="sr-only"> de {{ rec.originalName }}</span>
+            </RouterLink>
             <button
               v-if="rec.status === 'failed'"
               type="button"

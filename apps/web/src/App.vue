@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
+
+const route = useRoute()
+
+const navItems = [
+  { to: '/clients', label: 'Clientes' },
+  { to: '/recordings', label: 'Gravações' },
+  { to: '/costs', label: 'Custos' },
+]
+
+/** Destaca a seção também nas subpáginas (ex.: /recordings/:id). */
+const isActive = (to: string) => route.path === to || route.path.startsWith(`${to}/`)
 
 const navLink =
   'border-b-2 border-transparent pt-4 pb-3.5 font-semibold text-muted no-underline transition-colors duration-150 hover:text-ink'
@@ -20,14 +31,16 @@ const navLinkActive = 'border-primary! text-primary! hover:text-primary'
         Platform Attorney
       </RouterLink>
       <nav aria-label="Principal" class="flex gap-6">
-        <RouterLink to="/clients" :class="navLink" :active-class="navLinkActive">
-          Clientes
-        </RouterLink>
-        <RouterLink to="/recordings" :class="navLink" :active-class="navLinkActive">
-          Gravações
-        </RouterLink>
-        <RouterLink to="/costs" :class="navLink" :active-class="navLinkActive">
-          Custos
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+          :class="[navLink, isActive(item.to) && navLinkActive]"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
+          active-class=""
+          exact-active-class=""
+        >
+          {{ item.label }}
         </RouterLink>
       </nav>
     </div>

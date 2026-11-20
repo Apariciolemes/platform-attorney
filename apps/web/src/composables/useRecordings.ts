@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { errorMessage } from '@/services/http'
 import { recordingsService } from '@/services/recordings.service'
 import type { Recording } from '@/types/recording'
+import { recordingStage } from '@/utils/recording-stage'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -11,9 +12,8 @@ export function useRecordings() {
   const uploadProgress = ref<number | null>(null)
   const error = ref<string | null>(null)
 
-  const hasActiveJobs = computed(() =>
-    recordings.value.some((r) => r.status === 'pending' || r.status === 'processing'),
-  )
+  // Transcrição ou revisão do texto ainda em andamento em alguma gravação.
+  const hasActiveJobs = computed(() => recordings.value.some((r) => recordingStage(r).active))
 
   async function fetchRecordings() {
     try {
@@ -66,7 +66,7 @@ export function useRecordings() {
     }
   }
 
-  // Enquanto houver transcrição na fila ou em andamento, atualiza a lista periodicamente.
+  // Enquanto houver processamento em andamento, atualiza a lista periodicamente.
   let timer: ReturnType<typeof setInterval> | undefined
   watch(
     hasActiveJobs,

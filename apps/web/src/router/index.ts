@@ -15,6 +15,11 @@ export const router = createRouter({
       component: () => import('@/views/RecordingsView.vue'),
     },
     {
+      path: '/recordings/:id',
+      name: 'recording',
+      component: () => import('@/views/RecordingDetailView.vue'),
+    },
+    {
       path: '/costs',
       name: 'costs',
       component: () => import('@/views/CostsView.vue'),
