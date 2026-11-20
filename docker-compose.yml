@@ -1,5 +1,23 @@
 name: platform-attorney
 
+# Variáveis comuns à API e ao worker (banco, storage S3, fila).
+x-app-env: &app-env
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_USER: ${DB_USER:-postgres}
+  DB_PASSWORD: ${DB_PASSWORD:-postgres}
+  DB_NAME: ${DB_NAME:-platform_attorney}
+  DB_SYNCHRONIZE: "false"
+  # Sem STORAGE_* no .env, usa o storage local (SeaweedFS) abaixo.
+  STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://storage:8333}
+  STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+  STORAGE_BUCKET: ${STORAGE_BUCKET:-recordings}
+  STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-devaccesskey}
+  STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:-devsecretkey}
+  STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-true}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+
 services:
   db:
     image: postgres:17-alpine
@@ -18,6 +36,50 @@ services:
       timeout: 5s
       retries: 10
 
+  # Storage local compatível com S3 (os arquivos ficam no volume "storagedata").
+  storage:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    command: server -dir=/data -ip.bind=0.0.0.0 -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "${STORAGE_PORT:-8333}:8333"
+    volumes:
+      - storagedata:/data
+      - ./infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # Cria o bucket no storage local na primeira subida e encerra.
+  storage-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - storage
+    environment:
+      AWS_ACCESS_KEY_ID: devaccesskey
+      AWS_SECRET_ACCESS_KEY: devsecretkey
+      AWS_DEFAULT_REGION: us-east-1
+      BUCKET: ${STORAGE_BUCKET:-recordings}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for i in $$(seq 1 30); do
+          aws --endpoint-url http://storage:8333 s3api head-bucket --bucket "$$BUCKET" 2>/dev/null && echo "bucket $$BUCKET pronto" && exit 0
+          aws --endpoint-url http://storage:8333 s3 mb "s3://$$BUCKET" 2>/dev/null
+          sleep 2
+        done
+        echo "não foi possível criar o bucket $$BUCKET" && exit 1
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build:
       context: .
@@ -25,26 +87,44 @@ services:
       target: prod
     restart: unless-stopped
     environment:
+      <<: *app-env
       PORT: 3000
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      DB_NAME: ${DB_NAME:-platform_attorney}
       DB_MIGRATIONS_RUN: "true"
-      DB_SYNCHRONIZE: "false"
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 15s
+
+  # Processa a fila de transcrição (mesma imagem da API, outro entrypoint).
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: prod
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    environment:
+      <<: *app-env
+      # Só a API roda as migrations, para evitar corrida entre os dois.
+      DB_MIGRATIONS_RUN: "false"
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_STT_MODEL: ${GROQ_STT_MODEL:-whisper-large-v3}
+      TRANSCRIPTION_LANGUAGE: ${TRANSCRIPTION_LANGUAGE:-pt}
+    depends_on:
+      api:
+        condition: service_healthy
 
   web:
     build:
@@ -60,3 +140,5 @@ services:
 
 volumes:
   pgdata:
+  storagedata:
+  redisdata:
