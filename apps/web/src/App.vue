@@ -7,6 +7,7 @@ import { RouterLink, RouterView } from 'vue-router'
     <strong>Platform Attorney</strong>
     <nav>
       <RouterLink to="/clients">Clientes</RouterLink>
+      <RouterLink to="/recordings">Gravações</RouterLink>
     </nav>
   </header>
   <main class="container">
@@ -22,6 +23,10 @@ import { RouterLink, RouterView } from 'vue-router'
   padding: 0.9rem 1rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+nav {
+  display: flex;
+  gap: 1rem;
 }
 nav a {
   color: var(--muted);

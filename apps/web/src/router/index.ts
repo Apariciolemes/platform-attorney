@@ -9,5 +9,10 @@ export const router = createRouter({
       name: 'clients',
       component: () => import('@/views/ClientsView.vue'),
     },
+    {
+      path: '/recordings',
+      name: 'recordings',
+      component: () => import('@/views/RecordingsView.vue'),
+    },
   ],
 })
