@@ -288,7 +288,11 @@ apps/
       recordings-worker.module.ts  # composition root do worker
     main.ts                     # entrypoint HTTP
     worker.ts                   # entrypoint do worker
+  web/
+    PRODUCT.md                  # para quem é o produto, tom e princípios de design
+    DESIGN.md                   # sistema de design: fontes, cores, espaços, componentes
   web/src/
+    style.css                   # tokens e componentes do DESIGN.md
     services/                   # cliente HTTP (axios)
     composables/                # useClients, useRecordings (com polling)
     views/                      # ClientsView, RecordingsView
