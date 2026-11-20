@@ -37,6 +37,21 @@ const savingPercent = computed(() => {
   return Math.round((1 - p.replacementUsdPerMinute / p.usdPerMinute) * 100)
 })
 
+/**
+ * Estimativa de quanto custa revisar 1 hora de áudio: ~150 palavras faladas por minuto
+ * ≈ 200 tokens em português, lidos e reescritos, mais as instruções (~800 tokens).
+ */
+const correctionPerHourUsd = computed(() => {
+  const price = costs.value?.correction.price
+  if (!price) return null
+  const textTokens = 200 * 60
+  return (
+    ((textTokens + 800) * price.usdPerMillionInputTokens +
+      textTokens * price.usdPerMillionOutputTokens) /
+    1_000_000
+  )
+})
+
 /** ", que custa US$ 0,0045 por minuto (25% a menos)" */
 const replacementPriceText = computed(() => {
   const price = pricing.value?.replacementUsdPerMinute
@@ -77,8 +92,8 @@ onMounted(load)
     <header class="grid gap-2">
       <h1 class="text-2xl">Custos</h1>
       <p class="max-w-[60ch] text-muted">
-        Quanto custa transcrever os áudios. O serviço de transcrição cobra por minuto de áudio
-        enviado, então o custo depende só da duração da gravação.
+        Quanto custa cada áudio. A transcrição é cobrada por minuto de áudio; a revisão do texto
+        por IA, pelo tamanho do texto, e custa bem menos.
       </p>
     </header>
 
@@ -100,7 +115,7 @@ onMounted(load)
           </p>
 
           <dl class="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
-            <dt class="font-semibold text-muted">Serviço</dt>
+            <dt class="font-semibold text-muted">Transcrição</dt>
             <dd>{{ pricing.provider }}, modelo <code>{{ pricing.model }}</code></dd>
             <template v-if="pricing.usdPerMinute != null">
               <dt class="font-semibold text-muted">Uma hora de áudio</dt>
@@ -119,6 +134,21 @@ onMounted(load)
                 >, conferida em {{ formatDate(pricing.checkedAt) }}
               </dd>
             </template>
+            <dt class="font-semibold text-muted">Revisão do texto</dt>
+            <dd>
+              <template v-if="costs.correction.price">
+                Modelo <code>{{ costs.correction.model }}</code>,
+                {{ formatUsd(costs.correction.price.usdPerMillionInputTokens) }} por milhão de
+                tokens lidos e {{ formatUsd(costs.correction.price.usdPerMillionOutputTokens) }} por
+                milhão de tokens escritos
+                <span v-if="correctionPerHourUsd != null" class="text-muted">
+                  (≈ {{ formatUsd(correctionPerHourUsd) }} por hora de áudio)</span
+                >
+              </template>
+              <template v-else>
+                Modelo <code>{{ costs.correction.model }}</code>, preço desconhecido
+              </template>
+            </dd>
           </dl>
 
           <div
@@ -216,7 +246,8 @@ onMounted(load)
       <section class="grid gap-4" aria-labelledby="spent-title">
         <h2 id="spent-title" class="text-lg">Gasto até agora</h2>
         <p class="max-w-[70ch] text-muted">
-          Estimativa calculada pela duração de cada áudio transcrito e pelo preço atual. A fatura
+          Estimativa: a transcrição pela duração de cada áudio e o preço atual; a revisão pelos
+          tokens realmente gastos. A fatura
           real fica no
           <a
             href="https://platform.openai.com/usage"
@@ -238,6 +269,15 @@ onMounted(load)
               class="text-sm text-muted tabular-nums"
             >
               ≈ {{ formatBrl(costs.totals.costUsd * usdToBrl) }}
+            </dd>
+            <dd class="text-sm text-muted tabular-nums">
+              Transcrição
+              {{
+                costs.totals.transcriptionCostUsd != null
+                  ? formatUsd(costs.totals.transcriptionCostUsd)
+                  : 'sem preço'
+              }}
+              · revisão {{ formatUsd(costs.totals.correctionCostUsd) }}
             </dd>
           </div>
           <div class="grid gap-1">
@@ -267,7 +307,9 @@ onMounted(load)
                 <th scope="col" :class="th">Gravação</th>
                 <th scope="col" :class="th">Enviada em</th>
                 <th scope="col" :class="th">Duração</th>
-                <th scope="col" :class="th" class="text-right">Custo estimado</th>
+                <th scope="col" :class="th" class="text-right">Transcrição</th>
+                <th scope="col" :class="th" class="text-right">Revisão</th>
+                <th scope="col" :class="th" class="text-right">Total</th>
               </tr>
             </thead>
             <tbody class="max-sm:block">
@@ -286,11 +328,23 @@ onMounted(load)
                   }}</span>
                   <span v-else class="text-muted">Desconhecida</span>
                 </td>
-                <td :class="labeledTd" class="text-right tabular-nums max-sm:text-left" data-label="Custo estimado">
-                  <span v-if="rec.costUsd != null">{{ withBrl(rec.costUsd) }}</span>
+                <td :class="labeledTd" data-label="Transcrição" class="text-right tabular-nums max-sm:text-left">
+                  <span v-if="rec.transcriptionCostUsd != null">{{
+                    formatUsd(rec.transcriptionCostUsd)
+                  }}</span>
                   <span v-else-if="rec.status !== 'completed'" class="text-muted">
                     {{ notBilledLabel[rec.status] }}
                   </span>
+                  <span v-else class="text-muted">Sem preço</span>
+                </td>
+                <td :class="labeledTd" data-label="Revisão" class="text-right tabular-nums max-sm:text-left">
+                  <span v-if="rec.correctionCostUsd != null">{{
+                    formatUsd(rec.correctionCostUsd)
+                  }}</span>
+                  <span v-else class="text-muted">Sem revisão</span>
+                </td>
+                <td :class="labeledTd" data-label="Total" class="text-right font-semibold tabular-nums max-sm:text-left">
+                  <span v-if="rec.costUsd != null">{{ withBrl(rec.costUsd) }}</span>
                   <span v-else class="text-muted">Sem preço</span>
                 </td>
               </tr>
