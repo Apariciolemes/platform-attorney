@@ -26,6 +26,9 @@ const navLinkActive = 'border-primary! text-primary! hover:text-primary'
         <RouterLink to="/recordings" :class="navLink" :active-class="navLinkActive">
           Gravações
         </RouterLink>
+        <RouterLink to="/costs" :class="navLink" :active-class="navLinkActive">
+          Custos
+        </RouterLink>
       </nav>
     </div>
   </header>

@@ -14,5 +14,10 @@ export const router = createRouter({
       name: 'recordings',
       component: () => import('@/views/RecordingsView.vue'),
     },
+    {
+      path: '/costs',
+      name: 'costs',
+      component: () => import('@/views/CostsView.vue'),
+    },
   ],
 })
